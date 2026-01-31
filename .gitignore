@@ -6,6 +6,8 @@ build/
 .venv/
 .env
 *.db
+*.db-shm
+*.db-wal
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
