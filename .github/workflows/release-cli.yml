@@ -16,11 +16,11 @@ jobs:
       run:
         working-directory: pinchwork-cli
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.21"
           cache-dependency-path: pinchwork-cli/go.sum
