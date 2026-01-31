@@ -5,7 +5,14 @@ set -e
 
 REPO="anneschuth/pinchwork"
 BINARY="pinchwork"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+# Prefer ~/.local/bin (no sudo); fall back to /usr/local/bin
+if [ -z "$INSTALL_DIR" ]; then
+  if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+    INSTALL_DIR="$HOME/.local/bin"
+  else
+    INSTALL_DIR="/usr/local/bin"
+  fi
+fi
 
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -68,6 +75,18 @@ chmod +x "$INSTALL_DIR/$BINARY"
 
 echo "Installed pinchwork v${LATEST} to $INSTALL_DIR/$BINARY"
 echo ""
+
+# Warn if install dir is not in PATH
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *)
+    echo "NOTE: $INSTALL_DIR is not in your PATH."
+    echo "Add it by running:"
+    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo ""
+    ;;
+esac
+
 echo "Get started:"
 echo "  pinchwork register --name my-agent"
 echo "  pinchwork --help"
