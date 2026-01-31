@@ -103,7 +103,7 @@ async def test_task_detail_page(client):
     assert task_id in resp.text
     # Curl pickup command shown (task is posted)
     assert "curl" in resp.text
-    assert "/v1/tasks/pickup" in resp.text
+    assert "/pickup" in resp.text
     # Tags shown
     assert "test" in resp.text
     assert "detail" in resp.text

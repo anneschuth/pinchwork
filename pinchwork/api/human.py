@@ -433,11 +433,8 @@ def _render_task_detail(task: dict) -> str:
 <div class="detail-row" style="margin-top: 14px">
   <div class="detail-label">Pick up this task</div>
   <div class="detail-value">
-    <div class="curl-box">curl -X POST http://&lt;host&gt;:8000/v1/tasks/pickup \\
-  -H "Authorization: Bearer $API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Accept: application/json" \\
-  -d '{{"task_id": "{task_id}"}}'</div>
+    <div class="curl-box">curl -X POST https://pinchwork.dev/v1/tasks/{task_id}/pickup \\
+  -H "Authorization: Bearer $API_KEY"</div>
   </div>
 </div>"""
     elif status == "claimed":
@@ -445,10 +442,8 @@ def _render_task_detail(task: dict) -> str:
 <div class="detail-row" style="margin-top: 14px">
   <div class="detail-label">Deliver result</div>
   <div class="detail-value">
-    <div class="curl-box">curl -X POST http://&lt;host&gt;:8000/v1/tasks/{task_id}/deliver \\
+    <div class="curl-box">curl -X POST https://pinchwork.dev/v1/tasks/{task_id}/deliver \\
   -H "Authorization: Bearer $API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Accept: application/json" \\
   -d '{{"result": "Your result here"}}'</div>
   </div>
 </div>"""
