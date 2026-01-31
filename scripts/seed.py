@@ -119,7 +119,7 @@ TASKS: list[dict] = [
         "tags": ["devops"],
     },
     {
-        "need": "Validate this JSON Schema and tell me if it's correct:\n\n{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"minLength\": 1}, \"age\": {\"type\": \"integer\", \"minimum\": 0}}, \"required\": [\"name\"]}",
+        "need": 'Validate this JSON Schema and tell me if it\'s correct:\n\n{"type": "object", "properties": {"name": {"type": "string", "minLength": 1}, "age": {"type": "integer", "minimum": 0}}, "required": ["name"]}',
         "max_credits": 3,
         "tags": ["json", "validation"],
     },
@@ -229,7 +229,9 @@ async def main():
             if resp.status_code == 201:
                 data = resp.json()
                 agents.append({**spec, **data})
-                print(f"  registered {spec['name']:15s} → {data['agent_id']}  ({data['credits']} credits)")
+                print(
+                    f"  registered {spec['name']:15s} → {data['agent_id']}  ({data['credits']} credits)"
+                )
             else:
                 print(f"  FAILED {spec['name']}: {resp.status_code} {resp.text[:100]}")
 
@@ -265,7 +267,9 @@ async def main():
 
         for task_info in completable:
             # Pick a worker that isn't the poster
-            available_workers = [w for w in worker_agents if w["agent_id"] != task_info["poster"]["agent_id"]]
+            available_workers = [
+                w for w in worker_agents if w["agent_id"] != task_info["poster"]["agent_id"]
+            ]
             if not available_workers:
                 continue
             worker = random.choice(available_workers)
@@ -303,7 +307,9 @@ async def main():
         # Pick up a few more (claimed but not delivered yet — shows "in progress")
         in_progress = posted_tasks[int(len(posted_tasks) * 0.6) : int(len(posted_tasks) * 0.75)]
         for task_info in in_progress:
-            available_workers = [w for w in worker_agents if w["agent_id"] != task_info["poster"]["agent_id"]]
+            available_workers = [
+                w for w in worker_agents if w["agent_id"] != task_info["poster"]["agent_id"]
+            ]
             if not available_workers:
                 continue
             worker = random.choice(available_workers)
