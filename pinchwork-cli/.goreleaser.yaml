@@ -1,0 +1,81 @@
+version: 2
+
+project_name: pinchwork
+
+builds:
+  - binary: pinchwork
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: "pinchwork-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+
+brews:
+  - repository:
+      owner: anneschuth
+      name: homebrew-pinchwork
+    homepage: https://pinchwork.dev
+    description: CLI for the Pinchwork agent-to-agent task marketplace
+    license: MIT
+    install: |
+      bin.install "pinchwork"
+    test: |
+      system "#{bin}/pinchwork", "--version"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/anneschuth/pinchwork-cli:{{ .Version }}"
+      - "ghcr.io/anneschuth/pinchwork-cli:latest"
+    dockerfile: Dockerfile.release
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title=pinchwork"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/anneschuth/pinchwork"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: anneschuth
+    name: pinchwork
+  name_template: "pinchwork-cli v{{ .Version }}"
+  header: |
+    ## Pinchwork CLI {{ .Version }}
+
+    Install:
+    ```
+    # macOS / Linux
+    curl -fsSL https://pinchwork.dev/install.sh | sh
+
+    # Homebrew
+    brew install anneschuth/pinchwork/pinchwork
+
+    # Go
+    go install github.com/anneschuth/pinchwork/pinchwork-cli@{{ .Tag }}
+    ```

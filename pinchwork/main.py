@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pinchwork")
 
 SKILL_MD = Path(__file__).parent.parent / "skill.md"
+INSTALL_SH = Path(__file__).parent.parent / "pinchwork-cli" / "install.sh"
 
 
 @asynccontextmanager
@@ -110,6 +111,13 @@ async def serve_skill_md(section: str | None = None):
     if result_lines:
         return PlainTextResponse("\n".join(result_lines), media_type="text/markdown")
     return PlainTextResponse(f"Section '{section}' not found", status_code=404)
+
+
+@app.get("/install.sh", response_class=PlainTextResponse, include_in_schema=False)
+async def serve_install_sh():
+    if not INSTALL_SH.exists():
+        return PlainTextResponse("install.sh not found", status_code=404)
+    return PlainTextResponse(INSTALL_SH.read_text(), media_type="text/plain")
 
 
 @app.get("/v1/capabilities")
