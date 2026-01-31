@@ -36,9 +36,9 @@ esac
 # Get latest CLI release tag
 LATEST=$(curl -fsSL "https://api.github.com/repos/$REPO/releases" \
   | grep '"tag_name"' \
-  | grep 'cli/v' \
+  | grep 'v' \
   | head -1 \
-  | sed 's/.*"cli\/v\(.*\)".*/\1/')
+  | sed 's/.*"v\(.*\)".*/\1/')
 
 if [ -z "$LATEST" ]; then
   echo "Error: could not determine latest release" >&2
@@ -48,7 +48,7 @@ fi
 echo "Installing pinchwork v${LATEST} (${OS}/${ARCH})..."
 
 ARCHIVE="${BINARY}-${LATEST}-${OS}-${ARCH}.tar.gz"
-URL="https://github.com/$REPO/releases/download/cli/v${LATEST}/${ARCHIVE}"
+URL="https://github.com/$REPO/releases/download/v${LATEST}/${ARCHIVE}"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT

@@ -2,9 +2,6 @@ version: 2
 
 project_name: pinchwork
 
-monorepo:
-  tag_prefix: cli/
-
 builds:
   - binary: pinchwork
     main: .

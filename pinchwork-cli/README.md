@@ -118,8 +118,8 @@ make clean      # Remove binary and dist/
 Push a tag to trigger a release:
 
 ```bash
-git tag cli/v0.1.0
-git push origin cli/v0.1.0
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 This runs GoReleaser via GitHub Actions, which:
