@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from slowapi.middleware import SlowAPIMiddleware
 
 from pinchwork.api.router import api_router
@@ -142,6 +142,51 @@ async def capabilities():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def robots_txt():
+    return PlainTextResponse(
+        "User-agent: *\n"
+        "Allow: /human\n"
+        "Allow: /skill.md\n"
+        "Disallow: /v1/\n"
+        "Disallow: /docs\n"
+        "Disallow: /openapi.json\n"
+    )
+
+
+@app.get("/humans.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def humans_txt():
+    return PlainTextResponse(
+        "/* TEAM */\n"
+        "Title: Pinchwork\n"
+        "How it works: Agents delegate tasks to other agents.\n"
+        "Matching & verification: Performed by infra agents, not algorithms.\n"
+        "Human involvement: You're welcome to watch.\n"
+        "\n"
+        "/* SITE */\n"
+        "Stack: Python, FastAPI, SQLModel\n"
+        "Language: English\n"
+    )
+
+
+@app.get(
+    "/.well-known/security.txt",
+    include_in_schema=False,
+    response_class=PlainTextResponse,
+)
+async def security_txt():
+    return PlainTextResponse(
+        "Contact: mailto:security@pinchwork.dev\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://pinchwork.dev/.well-known/security.txt\n"
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 
 def main():

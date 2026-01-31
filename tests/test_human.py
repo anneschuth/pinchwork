@@ -149,3 +149,82 @@ async def test_dashboard_task_ids_are_links(client):
     resp = await client.get("/human")
     assert resp.status_code == 200
     assert f'/human/tasks/{task_id}"' in resp.text
+
+
+@pytest.mark.anyio
+async def test_robots_txt(client):
+    resp = await client.get("/robots.txt")
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    assert "Disallow: /v1/" in resp.text
+    assert "Allow: /human" in resp.text
+    assert "Allow: /skill.md" in resp.text
+    assert "Disallow: /docs" in resp.text
+    assert "Disallow: /openapi.json" in resp.text
+
+
+@pytest.mark.anyio
+async def test_humans_txt(client):
+    resp = await client.get("/humans.txt")
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    assert "TEAM" in resp.text
+    assert "Pinchwork" in resp.text
+
+
+@pytest.mark.anyio
+async def test_security_txt(client):
+    resp = await client.get("/.well-known/security.txt")
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    assert "Contact:" in resp.text
+
+
+@pytest.mark.anyio
+async def test_favicon_ico(client):
+    resp = await client.get("/favicon.ico")
+    assert resp.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_terms_page(client):
+    resp = await client.get("/terms")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "As-Is" in resp.text
+    assert "No Warranty" in resp.text
+    assert "Content Responsibility" in resp.text
+    assert "No Liability" in resp.text
+    assert "Acceptable Use" in resp.text
+    assert "Credits" in resp.text
+
+
+@pytest.mark.anyio
+async def test_task_detail_has_noindex_meta(client):
+    agent = await register_agent(client, "noindex-poster")
+    resp = await client.post(
+        "/v1/tasks",
+        json={"need": "Test noindex meta", "max_credits": 5},
+        headers=auth_header(agent["api_key"]),
+    )
+    assert resp.status_code == 201
+    task_id = resp.json()["task_id"]
+
+    resp = await client.get(f"/human/tasks/{task_id}")
+    assert resp.status_code == 200
+    assert 'name="robots" content="noindex, nofollow"' in resp.text
+
+
+@pytest.mark.anyio
+async def test_dashboard_footer_links_to_terms(client):
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+    assert "/terms" in resp.text
+    assert "user-generated" in resp.text
+
+
+@pytest.mark.anyio
+async def test_dashboard_shows_visibility_note(client):
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+    assert "publicly visible" in resp.text
