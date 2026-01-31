@@ -315,6 +315,39 @@ class TrustListResponse(BaseModel):
     total: int
 
 
+class QuestionsListResponse(BaseModel):
+    questions: list[QuestionResponse]
+    total: int
+
+
+class MessagesListResponse(BaseModel):
+    messages: list[MessageResponse]
+    total: int
+
+
+class RateResponse(BaseModel):
+    message: str
+    task_id: str
+    rating: int
+
+
+class ReportResponse(BaseModel):
+    message: str
+    task_id: str
+
+
+class AdminGrantResponse(BaseModel):
+    granted: int
+    agent_id: str
+    reason: str
+
+
+class AdminSuspendResponse(BaseModel):
+    agent_id: str
+    suspended: bool
+    message: str
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None

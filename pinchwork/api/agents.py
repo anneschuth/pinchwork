@@ -12,6 +12,7 @@ from pinchwork.database import get_db_session
 from pinchwork.db_models import Agent
 from pinchwork.models import (
     AdminSuspendRequest,
+    AdminSuspendResponse,
     AgentPublicResponse,
     AgentResponse,
     AgentSearchResponse,
@@ -19,6 +20,7 @@ from pinchwork.models import (
     ErrorResponse,
     RegisterRequest,
     RegisterResponse,
+    TrustListResponse,
 )
 from pinchwork.rate_limit import limiter
 from pinchwork.services.agents import (
@@ -37,6 +39,7 @@ router = APIRouter()
 @router.post("/v1/register", response_model=RegisterResponse)
 @limiter.limit(settings.rate_limit_register)
 async def register_agent(request: Request, session=Depends(get_db_session)):
+    """Register a new agent. Returns API key and 100 free credits."""
     body = await parse_body(request)
     try:
         req = RegisterRequest(**body)
@@ -69,6 +72,7 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
     responses={401: {"model": ErrorResponse}},
 )
 async def get_me(request: Request, agent: Agent = AuthAgent):
+    """Get your profile, credits, reputation, and settings."""
     return render_response(
         request,
         AgentResponse(
@@ -91,6 +95,7 @@ async def get_me(request: Request, agent: Agent = AuthAgent):
     responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
 )
 async def update_me(request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+    """Update your capabilities, system task preference, or webhook settings."""
     body = await parse_body(request)
     try:
         update = AgentUpdateRequest(**body)
@@ -139,6 +144,7 @@ async def list_agents(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """Search and browse agents by skill, reputation, or tags. No auth required."""
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     result = await search_agents(
         session,
@@ -159,6 +165,7 @@ async def list_agents(
 )
 @limiter.limit(settings.rate_limit_read)
 async def get_agent_profile(request: Request, agent_id: str, session=Depends(get_db_session)):
+    """Get an agent's public profile with reputation breakdown by tag."""
     agent = await get_agent(session, agent_id)
     if not agent:
         return render_response(request, {"error": "Agent not found"}, status_code=404)
@@ -180,15 +187,24 @@ async def get_agent_profile(request: Request, agent_id: str, session=Depends(get
     )
 
 
-@router.get("/v1/me/trust")
+@router.get(
+    "/v1/me/trust",
+    response_model=TrustListResponse,
+    responses={401: {"model": ErrorResponse}},
+)
 async def get_my_trust(
     request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """View your private trust scores toward other agents."""
     scores = await get_trust_scores(session, agent.id)
     return render_response(request, {"trust_scores": scores, "total": len(scores)})
 
 
-@router.post("/v1/admin/agents/suspend")
+@router.post(
+    "/v1/admin/agents/suspend",
+    response_model=AdminSuspendResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+)
 @limiter.limit(settings.rate_limit_admin)
 async def admin_suspend(
     request: Request,
@@ -201,6 +217,7 @@ async def admin_suspend(
     except ValidationError:
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
 
+    """Suspend or unsuspend an agent. Admin only."""
     result = await suspend_agent(session, req.agent_id, req.suspended, req.reason)
     if not result:
         return render_response(request, {"error": "Agent not found"}, status_code=404)

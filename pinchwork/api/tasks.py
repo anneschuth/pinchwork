@@ -13,13 +13,20 @@ from pinchwork.db_models import Agent
 from pinchwork.models import (
     AnswerRequest,
     BatchPickupRequest,
+    BatchPickupResponse,
     ErrorResponse,
     MessageRequest,
+    MessageResponse,
+    MessagesListResponse,
     MyTasksResponse,
     QuestionRequest,
+    QuestionResponse,
+    QuestionsListResponse,
     RateRequest,
+    RateResponse,
     RejectRequest,
     ReportRequest,
+    ReportResponse,
     TaskAvailableResponse,
     TaskCreateRequest,
     TaskPickupResponse,
@@ -61,6 +68,7 @@ router = APIRouter()
 async def delegate_task(
     request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Create a new task. Use `wait` to block until a worker delivers a result."""
     body = await parse_body(request)
 
     # Bug #16: validate through Pydantic model
@@ -110,6 +118,7 @@ async def browse_tasks(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """Browse available tasks. Matched tasks appear first, then broadcast."""
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     result = await list_available_tasks(
         session, agent.id, tags=tag_list, search=search, limit=limit, offset=offset
@@ -132,6 +141,7 @@ async def my_tasks(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """List tasks you posted or are working on. Filter by role and status."""
     result = await list_my_tasks(
         session, agent.id, role=role, status=status, limit=limit, offset=offset
     )
@@ -150,6 +160,7 @@ async def my_tasks(
 async def poll_task(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Get task status and result. Only the poster and worker can view a task."""
     task = await get_task(session, task_id)
     if not task:
         return render_response(request, {"error": "Task not found"}, status_code=404)
@@ -174,6 +185,7 @@ async def pickup(
     tags: str | None = None,
     search: str | None = None,
 ):
+    """Claim the next available task. Returns 204 if no tasks are available."""
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     task = await pickup_task(session, agent.id, tags=tag_list, search=search)
     if not task:
@@ -201,6 +213,7 @@ async def pickup(
 async def deliver(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Submit your completed work. Optionally set credits_claimed below max_credits."""
     body = await parse_body(request)
     result = body.get("result", "")
     if not result:
@@ -235,6 +248,7 @@ async def deliver(
 async def approve(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Approve a delivery and release credits to the worker. Optionally rate 1-5."""
     body = await parse_body(request)
     rating = body.get("rating")
     feedback = body.get("feedback")
@@ -260,6 +274,7 @@ async def approve(
 async def reject(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Reject a delivery. Reason required. Worker gets a 5-min grace period."""
     body = await parse_body(request)
     try:
         req = RejectRequest(**body)
@@ -283,6 +298,7 @@ async def reject(
 async def cancel(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Cancel a task you posted. Escrowed credits are refunded."""
     task = await cancel_task(session, task_id, agent.id)
     return render_task_result(request, task)
 
@@ -300,6 +316,7 @@ async def cancel(
 async def abandon(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Give back a claimed task. Too many abandons triggers a cooldown."""
     task = await abandon_task(session, task_id, agent.id)
     return render_response(request, task)
 
@@ -316,6 +333,7 @@ async def abandon(
 async def pickup_specific(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """Claim a specific task by ID. Returns 204 if the task is not available."""
     task = await pickup_specific_task(session, task_id, agent.id)
     if not task:
         return Response(status_code=204)
@@ -328,6 +346,7 @@ async def pickup_specific(
 
 @router.post(
     "/v1/tasks/{task_id}/rate",
+    response_model=RateResponse,
     responses={
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
@@ -343,12 +362,14 @@ async def rate_task_poster(
         req = RateRequest(**body)
     except ValidationError:
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
+    """Rate the poster after task approval. Workers only."""
     result = await rate_poster(session, task_id, agent.id, req.rating, req.feedback)
     return render_response(request, result, status_code=201)
 
 
 @router.post(
     "/v1/tasks/{task_id}/report",
+    response_model=ReportResponse,
     responses={
         400: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
@@ -362,6 +383,7 @@ async def report_task(
         req = ReportRequest(**body)
     except ValidationError:
         return render_response(request, {"error": "Missing reason"}, status_code=400)
+    """Report a suspicious or abusive task."""
     result = await create_report(session, task_id, agent.id, req.reason)
     return render_response(request, result, status_code=201)
 
@@ -373,6 +395,7 @@ async def report_task(
 
 @router.post(
     "/v1/tasks/{task_id}/questions",
+    response_model=QuestionResponse,
     responses={
         400: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
@@ -390,12 +413,14 @@ async def post_question(
         return render_response(
             request, {"error": "Missing required field: question"}, status_code=400
         )
+    """Ask a clarifying question before picking up a task."""
     result = await ask_question(session, task_id, agent.id, req.question)
     return render_response(request, result, status_code=201)
 
 
 @router.post(
     "/v1/tasks/{task_id}/questions/{question_id}/answer",
+    response_model=QuestionResponse,
     responses={
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
@@ -417,17 +442,20 @@ async def post_answer(
         return render_response(
             request, {"error": "Missing required field: answer"}, status_code=400
         )
+    """Answer a question on your posted task."""
     result = await answer_question(session, task_id, question_id, agent.id, req.answer)
     return render_response(request, result)
 
 
 @router.get(
     "/v1/tasks/{task_id}/questions",
+    response_model=QuestionsListResponse,
     responses={404: {"model": ErrorResponse}},
 )
 async def get_questions(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """List all questions and answers on a task."""
     questions = await list_questions(session, task_id)
     return render_response(request, {"questions": questions, "total": len(questions)})
 
@@ -439,6 +467,7 @@ async def get_questions(
 
 @router.post(
     "/v1/tasks/{task_id}/messages",
+    response_model=MessageResponse,
     responses={
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
@@ -456,12 +485,14 @@ async def post_message(
         return render_response(
             request, {"error": "Missing required field: message"}, status_code=400
         )
+    """Send a message to the poster or worker on a claimed/delivered task."""
     result = await send_message(session, task_id, agent.id, req.message)
     return render_response(request, result, status_code=201)
 
 
 @router.get(
     "/v1/tasks/{task_id}/messages",
+    response_model=MessagesListResponse,
     responses={
         403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
@@ -470,6 +501,7 @@ async def post_message(
 async def get_messages(
     request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
+    """List messages on a task. Only the poster and worker can view messages."""
     messages = await list_messages(session, task_id, agent.id)
     return render_response(request, {"messages": messages, "total": len(messages)})
 
@@ -481,6 +513,7 @@ async def get_messages(
 
 @router.post(
     "/v1/tasks/pickup/batch",
+    response_model=BatchPickupResponse,
     responses={401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
 )
 @limiter.limit(settings.rate_limit_pickup)
@@ -494,5 +527,6 @@ async def batch_pickup(
         req = BatchPickupRequest(**body)
     except (ValidationError, Exception):
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
+    """Claim multiple tasks at once. Returns up to `count` tasks (max 10)."""
     tasks = await pickup_batch(session, agent.id, count=req.count, tags=req.tags, search=req.search)
     return render_response(request, {"tasks": tasks, "total": len(tasks)})

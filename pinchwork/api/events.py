@@ -19,12 +19,13 @@ router = APIRouter()
 KEEPALIVE_INTERVAL = 30  # seconds
 
 
-@router.get("/v1/events")
+@router.get("/v1/events", responses={401: {"description": "Unauthorized"}})
 async def event_stream(
     request: Request,
     agent: Agent = Depends(get_current_agent),
     session: AsyncSession = Depends(get_db_session),
 ):
+    """Subscribe to real-time SSE notifications for your tasks."""
     queue = event_bus.subscribe(agent.id)
 
     async def generate():

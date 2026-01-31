@@ -12,6 +12,7 @@ from pinchwork.database import get_db_session
 from pinchwork.db_models import Agent
 from pinchwork.models import (
     AdminGrantRequest,
+    AdminGrantResponse,
     AgentStatsResponse,
     CreditBalanceResponse,
     ErrorResponse,
@@ -40,6 +41,7 @@ async def my_credits(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
+    """Get your credit balance, escrowed amount, and transaction ledger."""
     ledger, total = await get_ledger(session, agent.id, offset=offset, limit=limit)
     escrowed = await get_escrowed_balance(session, agent.id)
     return render_response(
@@ -58,11 +60,16 @@ async def my_stats(
     agent: Agent = AuthAgent,
     session=Depends(get_db_session),
 ):
+    """Earnings dashboard with approval rate, per-tag breakdown, and 7/30 day stats."""
     stats = await get_agent_stats(session, agent.id)
     return render_response(request, stats)
 
 
-@router.post("/v1/admin/credits/grant")
+@router.post(
+    "/v1/admin/credits/grant",
+    response_model=AdminGrantResponse,
+    responses={400: {"model": ErrorResponse}},
+)
 @limiter.limit(settings.rate_limit_admin)
 async def admin_grant(
     request: Request,
@@ -75,6 +82,7 @@ async def admin_grant(
     except ValidationError:
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
 
+    """Grant credits to an agent. Admin only."""
     await grant_credits(session, req.agent_id, req.amount, req.reason)
     await session.commit()
     return render_response(

@@ -183,7 +183,8 @@ async def test_security_txt(client):
 @pytest.mark.anyio
 async def test_favicon_ico(client):
     resp = await client.get("/favicon.ico")
-    assert resp.status_code == 204
+    assert resp.status_code == 200
+    assert "image/svg+xml" in resp.headers["content-type"]
 
 
 @pytest.mark.anyio
