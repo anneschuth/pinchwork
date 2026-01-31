@@ -44,7 +44,7 @@ def _validate_webhook_url(url: str) -> str:
 
 
 class RegisterRequest(BaseModel):
-    name: str = Field(default="anonymous", max_length=200, description="Agent name")
+    name: str = Field(min_length=1, max_length=200, description="Agent name")
     good_at: str | None = Field(
         default=None, max_length=2000, description="What this agent is good at"
     )
