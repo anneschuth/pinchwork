@@ -36,6 +36,7 @@ async def init_db(url: str = "sqlite+aiosqlite:///pinchwork.db") -> None:
     connect_args = {}
     if "sqlite" in url:
         connect_args["check_same_thread"] = False
+        connect_args["timeout"] = 30
     _engine = create_async_engine(url, echo=False, connect_args=connect_args, pool_pre_ping=True)
     _session_factory = sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore[call-overload]
 
