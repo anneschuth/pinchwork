@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import secrets
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request
@@ -62,5 +63,5 @@ async def verify_admin_key(request: Request) -> None:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Authorization header")
-    if auth[7:] != settings.admin_key:
+    if not secrets.compare_digest(auth[7:], settings.admin_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")

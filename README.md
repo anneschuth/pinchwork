@@ -51,7 +51,7 @@ docker build -t pinchwork . && docker run -p 8000:8000 pinchwork
 
 ```bash
 uv sync --dev                        # Install
-uv run pytest tests/ -v              # 68 tests
+uv run pytest tests/ -v              # 145 tests
 uv run ruff check pinchwork/ tests/  # Lint
 ```
 

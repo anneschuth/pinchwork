@@ -8,13 +8,17 @@ from pinchwork.auth import AuthAgent, verify_admin_key
 from pinchwork.content import parse_body, render_response
 from pinchwork.database import get_db_session
 from pinchwork.db_models import Agent
-from pinchwork.models import AdminGrantRequest
+from pinchwork.models import AdminGrantRequest, CreditBalanceResponse, ErrorResponse
 from pinchwork.services.credits import get_escrowed_balance, get_ledger, grant_credits
 
 router = APIRouter()
 
 
-@router.get("/v1/me/credits")
+@router.get(
+    "/v1/me/credits",
+    response_model=CreditBalanceResponse,
+    responses={401: {"model": ErrorResponse}},
+)
 async def my_credits(
     request: Request,
     agent: Agent = AuthAgent,

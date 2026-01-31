@@ -8,13 +8,15 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
+from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from slowapi.middleware import SlowAPIMiddleware
 
 from pinchwork.api.router import api_router
 from pinchwork.background import background_loop
 from pinchwork.config import settings
+from pinchwork.content import render_response
 from pinchwork.database import close_db, get_session_factory, init_db
 from pinchwork.rate_limit import limiter
 
@@ -55,6 +57,20 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(api_router)
+
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    return RedirectResponse("/skill.md")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return render_response(
+        request,
+        {"error": exc.detail},
+        status_code=exc.status_code,
+    )
 
 
 @app.get("/skill.md", response_class=PlainTextResponse)

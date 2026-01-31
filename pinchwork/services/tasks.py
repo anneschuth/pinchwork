@@ -865,6 +865,59 @@ async def list_available_tasks(
     return {"tasks": [_task_to_dict(t) for t in page], "total": total}
 
 
+async def list_my_tasks(
+    session: AsyncSession,
+    agent_id: str,
+    role: str | None = None,
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict:
+    """List tasks where this agent is poster and/or worker."""
+    queries = []
+
+    if role in (None, "poster"):
+        q = select(Task).where(Task.poster_id == agent_id, Task.is_system == False)  # noqa: E712
+        if status:
+            q = q.where(Task.status == status)
+        queries.append(q)
+
+    if role in (None, "worker"):
+        q = select(Task).where(Task.worker_id == agent_id, Task.is_system == False)  # noqa: E712
+        if status:
+            q = q.where(Task.status == status)
+        queries.append(q)
+
+    all_tasks: list[Task] = []
+    seen_ids: set[str] = set()
+    for q in queries:
+        result = await session.execute(q.order_by(Task.created_at.desc()))
+        for t in result.scalars().all():
+            if t.id not in seen_ids:
+                seen_ids.add(t.id)
+                all_tasks.append(t)
+
+    # Sort by created_at descending
+    all_tasks.sort(key=lambda t: t.created_at or datetime.min, reverse=True)
+    total = len(all_tasks)
+    page = all_tasks[offset : offset + limit]
+
+    def _task_to_response(t: Task) -> dict:
+        s = t.status.value if isinstance(t.status, TaskStatus) else t.status
+        return {
+            "task_id": t.id,
+            "status": s,
+            "need": t.need,
+            "context": t.context,
+            "result": t.result,
+            "credits_charged": t.credits_charged,
+            "poster_id": t.poster_id,
+            "worker_id": t.worker_id,
+        }
+
+    return {"tasks": [_task_to_response(t) for t in page], "total": total}
+
+
 async def create_report(
     session: AsyncSession, task_id: str, reporter_id: str, reason: str
 ) -> dict:

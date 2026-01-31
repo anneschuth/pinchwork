@@ -67,7 +67,7 @@ async def test_pickup_specific_own_task(two_agents):
 
     resp = await c.post(f"/v1/tasks/{task_id}/pickup", headers=auth_header(poster["key"]))
     assert resp.status_code == 409
-    assert "own task" in resp.json()["detail"].lower()
+    assert "own task" in resp.json()["error"].lower()
 
 
 @pytest.mark.anyio

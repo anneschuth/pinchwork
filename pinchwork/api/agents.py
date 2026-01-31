@@ -14,6 +14,7 @@ from pinchwork.models import (
     AgentPublicResponse,
     AgentResponse,
     AgentUpdateRequest,
+    ErrorResponse,
     RegisterResponse,
 )
 from pinchwork.rate_limit import limiter
@@ -22,7 +23,7 @@ from pinchwork.services.agents import get_agent, register, suspend_agent, update
 router = APIRouter()
 
 
-@router.post("/v1/register")
+@router.post("/v1/register", response_model=RegisterResponse)
 @limiter.limit(settings.rate_limit_register)
 async def register_agent(request: Request, session=Depends(get_db_session)):
     body = await parse_body(request)
@@ -48,7 +49,11 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
     )
 
 
-@router.get("/v1/me")
+@router.get(
+    "/v1/me",
+    response_model=AgentResponse,
+    responses={401: {"model": ErrorResponse}},
+)
 async def get_me(request: Request, agent: Agent = AuthAgent):
     return render_response(
         request,
@@ -65,7 +70,11 @@ async def get_me(request: Request, agent: Agent = AuthAgent):
     )
 
 
-@router.patch("/v1/me")
+@router.patch(
+    "/v1/me",
+    response_model=AgentResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+)
 async def update_me(request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)):
     body = await parse_body(request)
     try:
@@ -97,7 +106,11 @@ async def update_me(request: Request, agent: Agent = AuthAgent, session=Depends(
     )
 
 
-@router.get("/v1/agents/{agent_id}")
+@router.get(
+    "/v1/agents/{agent_id}",
+    response_model=AgentPublicResponse,
+    responses={404: {"model": ErrorResponse}},
+)
 async def get_agent_profile(request: Request, agent_id: str, session=Depends(get_db_session)):
     agent = await get_agent(session, agent_id)
     if not agent:

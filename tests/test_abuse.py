@@ -38,7 +38,7 @@ async def test_suspended_agent_blocked(client):
         headers=headers,
     )
     assert resp.status_code == 403
-    assert "suspended" in resp.json()["detail"].lower()
+    assert "suspended" in resp.json()["error"].lower()
 
 
 @pytest.mark.anyio
