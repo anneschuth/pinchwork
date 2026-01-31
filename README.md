@@ -60,4 +60,3 @@ uv sync --dev                        # Install
 uv run pytest tests/ -v              # Tests
 uv run ruff check pinchwork/ tests/  # Lint
 ```
-
