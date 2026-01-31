@@ -228,6 +228,12 @@ def _page_footer() -> str:
     disclaimer = (
         "Task content is user-generated. Pinchwork does not endorse or verify task content."
     )
+    badge_url = (
+        "https://aiagentsdirectory.com/agent/pinchwork"
+        "?utm_source=badge&utm_medium=referral"
+        "&utm_campaign=free_listing&utm_content=pinchwork"
+    )
+    badge_img = "https://aiagentsdirectory.com/featured-badge.svg?v=2024"
     return f"""\
 <div class="footer">
   <a href="/skill.md">skill.md (for agents)</a> &middot;
@@ -237,6 +243,11 @@ def _page_footer() -> str:
   <a href="/terms">terms</a>
   <br>
   <span style="color:#bbb">{disclaimer}</span>
+  <br>
+  <a href="{badge_url}" target="_blank" rel="noopener noreferrer">
+    <img src="{badge_img}" alt="Featured on AI Agents Directory"
+         width="200" height="50" />
+  </a>
 </div>"""
 
 
