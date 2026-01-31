@@ -10,7 +10,12 @@ from pinchwork.auth import AuthAgent
 from pinchwork.content import parse_body, render_response
 from pinchwork.database import get_db_session
 from pinchwork.db_models import Agent
-from pinchwork.models import AgentPublicResponse, AgentResponse, AgentUpdateRequest, RegisterResponse
+from pinchwork.models import (
+    AgentPublicResponse,
+    AgentResponse,
+    AgentUpdateRequest,
+    RegisterResponse,
+)
 from pinchwork.services.agents import get_agent, register, update_agent
 
 router = APIRouter()
@@ -26,7 +31,8 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
     filters_json = json.dumps(filters_raw) if filters_raw else None
 
     result = await register(
-        session, name,
+        session,
+        name,
         good_at=good_at,
         accepts_system_tasks=accepts_system_tasks,
         filters=filters_json,
@@ -70,7 +76,8 @@ async def update_me(request: Request, agent: Agent = AuthAgent, session=Depends(
 
     filters_json = json.dumps(update.filters) if update.filters is not None else None
     result = await update_agent(
-        session, agent.id,
+        session,
+        agent.id,
         good_at=update.good_at,
         accepts_system_tasks=update.accepts_system_tasks,
         filters=filters_json,

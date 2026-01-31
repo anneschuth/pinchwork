@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -35,10 +36,8 @@ async def lifespan(app: FastAPI):
     yield
 
     bg_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await bg_task
-    except asyncio.CancelledError:
-        pass
     await close_db()
     logger.info("Database closed")
 

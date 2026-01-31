@@ -7,6 +7,7 @@ but use the in-memory test client for speed and isolation.
 from __future__ import annotations
 
 import json
+from datetime import UTC
 
 import pytest
 
@@ -330,18 +331,28 @@ async def test_verification_failed_leaves_task_delivered(client, db):
     resp = await client.post("/v1/tasks/pickup", headers=auth_header(infra["api_key"]))
     sys_id = resp.json()["task_id"]
     match = json.dumps({"ranked_agents": [worker["agent_id"]]})
-    await client.post(f"/v1/tasks/{sys_id}/deliver", json={"result": match}, headers=auth_header(infra["api_key"]))
+    await client.post(
+        f"/v1/tasks/{sys_id}/deliver", json={"result": match}, headers=auth_header(infra["api_key"])
+    )
 
     # Worker picks up and delivers
     resp = await client.post("/v1/tasks/pickup", headers=auth_header(worker["api_key"]))
     assert resp.json()["task_id"] == task_id
-    await client.post(f"/v1/tasks/{task_id}/deliver", json={"result": "Bad work"}, headers=auth_header(worker["api_key"]))
+    await client.post(
+        f"/v1/tasks/{task_id}/deliver",
+        json={"result": "Bad work"},
+        headers=auth_header(worker["api_key"]),
+    )
 
     # Infra picks up verification, delivers FAIL
     resp = await client.post("/v1/tasks/pickup", headers=auth_header(infra["api_key"]))
     assert "Verify completion" in resp.json()["need"]
     fail_result = json.dumps({"meets_requirements": False, "explanation": "Quality too low"})
-    await client.post(f"/v1/tasks/{resp.json()['task_id']}/deliver", json={"result": fail_result}, headers=auth_header(infra["api_key"]))
+    await client.post(
+        f"/v1/tasks/{resp.json()['task_id']}/deliver",
+        json={"result": fail_result},
+        headers=auth_header(infra["api_key"]),
+    )
 
     # Task should still be delivered (not auto-approved, not rejected)
     async with db() as session:
@@ -378,7 +389,11 @@ async def test_poster_approves_before_verification(client, db):
     assert resp.json()["task_id"] == task_id
 
     # Worker delivers
-    await client.post(f"/v1/tasks/{task_id}/deliver", json={"result": "Done"}, headers=auth_header(worker["api_key"]))
+    await client.post(
+        f"/v1/tasks/{task_id}/deliver",
+        json={"result": "Done"},
+        headers=auth_header(worker["api_key"]),
+    )
 
     # Poster approves immediately
     resp = await client.post(f"/v1/tasks/{task_id}/approve", headers=auth_header(poster["api_key"]))
@@ -402,13 +417,19 @@ async def test_poster_rejects_despite_verification_pass(client, db):
 
     # Worker picks up and delivers
     resp = await client.post("/v1/tasks/pickup", headers=auth_header(worker["api_key"]))
-    await client.post(f"/v1/tasks/{task_id}/deliver", json={"result": "Done"}, headers=auth_header(worker["api_key"]))
+    await client.post(
+        f"/v1/tasks/{task_id}/deliver",
+        json={"result": "Done"},
+        headers=auth_header(worker["api_key"]),
+    )
 
     # Manually set verification to passed without auto-approve
     async with db() as session:
         task = await session.get(Task, task_id)
         task.verification_status = "passed"
-        task.verification_result = json.dumps({"meets_requirements": True, "explanation": "Looks good"})
+        task.verification_result = json.dumps(
+            {"meets_requirements": True, "explanation": "Looks good"}
+        )
         session.add(task)
         await session.commit()
 
@@ -426,7 +447,7 @@ async def test_poster_rejects_despite_verification_pass(client, db):
 @pytest.mark.asyncio
 async def test_match_expiry_falls_back_to_broadcast(client, db):
     """When match deadline passes, expire_matching sets broadcast."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from pinchwork.background import expire_matching
 
@@ -443,7 +464,7 @@ async def test_match_expiry_falls_back_to_broadcast(client, db):
     # Set match_deadline to the past
     async with db() as session:
         task = await session.get(Task, task_id)
-        task.match_deadline = datetime.now(timezone.utc) - timedelta(seconds=10)
+        task.match_deadline = datetime.now(UTC) - timedelta(seconds=10)
         session.add(task)
         await session.commit()
 

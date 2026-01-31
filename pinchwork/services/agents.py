@@ -93,9 +93,7 @@ async def update_agent(
 
 async def update_reputation(session: AsyncSession, aid: str) -> None:
     """Recalculate reputation from ratings."""
-    result = await session.execute(
-        select(func.avg(Rating.score)).where(Rating.rated_id == aid)
-    )
+    result = await session.execute(select(func.avg(Rating.score)).where(Rating.rated_id == aid))
     avg = result.scalar_one_or_none()
     if avg is not None:
         agent = await session.get(Agent, aid)

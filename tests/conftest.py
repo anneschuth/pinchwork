@@ -9,7 +9,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
 from pinchwork.database import get_db_session
-from pinchwork.db_models import Agent, CreditLedger, Rating, Task, TaskMatch  # noqa: F401 — register tables
+from pinchwork.db_models import (  # noqa: F401 — register tables
+    Agent,
+    CreditLedger,
+    Rating,
+    Task,
+    TaskMatch,
+)
 from pinchwork.main import app
 
 

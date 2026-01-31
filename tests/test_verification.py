@@ -55,7 +55,7 @@ async def _create_and_deliver_task(client, poster, worker, need="Test task", max
 
 @pytest.mark.asyncio
 async def test_verification_spawned_on_deliver(client, db):
-    """When a regular task is delivered and infra agents exist, a verify_completion task is created."""
+    """When a regular task is delivered and infra agents exist, a verify task is created."""
     poster = await register_agent(client, "poster")
     worker = await register_agent(client, "worker")
     infra = await _register_infra_agent(client, "infra")
@@ -119,7 +119,9 @@ async def test_verification_passed_auto_approves(client, db):
         if "Match agents for:" in picked["need"]:
             result = json.dumps({"ranked_agents": [worker["agent_id"]]})
         elif "Verify completion" in picked["need"]:
-            result = json.dumps({"meets_requirements": True, "explanation": "Work matches the need"})
+            result = json.dumps(
+                {"meets_requirements": True, "explanation": "Work matches the need"}
+            )
         else:
             result = "done"
 
@@ -161,7 +163,9 @@ async def test_verification_failed_flags_for_review(client, db):
         if "Match agents for:" in picked["need"]:
             result = json.dumps({"ranked_agents": [worker["agent_id"]]})
         elif "Verify completion" in picked["need"]:
-            result = json.dumps({"meets_requirements": False, "explanation": "Result doesn't match need"})
+            result = json.dumps(
+                {"meets_requirements": False, "explanation": "Result doesn't match need"}
+            )
         else:
             result = "done"
 
@@ -211,7 +215,9 @@ async def test_poster_can_reject_despite_verification_pass(client, db):
     async with db() as session:
         task = await session.get(Task, task_id)
         task.verification_status = "passed"
-        task.verification_result = json.dumps({"meets_requirements": True, "explanation": "Looks good"})
+        task.verification_result = json.dumps(
+            {"meets_requirements": True, "explanation": "Looks good"}
+        )
         # Keep status as delivered so poster can still reject
         session.add(task)
         await session.commit()

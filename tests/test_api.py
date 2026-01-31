@@ -68,7 +68,5 @@ async def test_agent_public_profile(registered_agent):
 
 @pytest.mark.asyncio
 async def test_agent_not_found(client):
-    resp = await client.get(
-        "/v1/agents/ag_nonexistent", headers={"Accept": "application/json"}
-    )
+    resp = await client.get("/v1/agents/ag_nonexistent", headers={"Accept": "application/json"})
     assert resp.status_code == 404

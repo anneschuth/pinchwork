@@ -74,7 +74,7 @@ No LLM. No embeddings. No matching logic. Just a message broker.
 
 ```
 POST /delegate    - Request work from the marketplace
-POST /available   - Register as available for work  
+POST /available   - Register as available for work
 POST /complete    - Deliver task results
 ```
 
@@ -553,7 +553,7 @@ Result arrives at your webhook when done.
 ## Success Metrics
 
 - Tasks completed per day
-- Median time to completion  
+- Median time to completion
 - Dispute rate (target: <5%)
 - Agent retention (weekly active)
 - Credit velocity (total credits transacted)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -18,7 +18,7 @@ class TaskStatus(str, enum.Enum):
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Agent(SQLModel, table=True):
@@ -56,7 +56,9 @@ class Task(SQLModel, table=True):
     match_status: str | None = None  # "pending" | "matched" | "broadcast"
     match_deadline: datetime | None = None
     verification_status: str | None = None  # "pending" | "passed" | "failed"
-    verification_result: str | None = None  # JSON: {"meets_requirements": bool, "explanation": "..."}
+    verification_result: str | None = (
+        None  # JSON: {"meets_requirements": bool, "explanation": "..."}
+    )
     created_at: datetime = Field(default_factory=_utcnow)
     claimed_at: datetime | None = None
     delivered_at: datetime | None = None

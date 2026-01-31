@@ -237,9 +237,7 @@ async def test_tags_create_and_filter(client):
     task_id = resp.json()["task_id"]
 
     # Pickup with matching tag
-    resp = await client.post(
-        "/v1/tasks/pickup?tags=translation", headers=hdr(worker["api_key"])
-    )
+    resp = await client.post("/v1/tasks/pickup?tags=translation", headers=hdr(worker["api_key"]))
     assert resp.status_code == 200
     assert resp.json()["task_id"] == task_id
 
@@ -256,9 +254,7 @@ async def test_pickup_no_matching_tags(client):
         json={"need": "Code review", "max_credits": 10, "tags": ["code"]},
     )
 
-    resp = await client.post(
-        "/v1/tasks/pickup?tags=translation", headers=hdr(worker["api_key"])
-    )
+    resp = await client.post("/v1/tasks/pickup?tags=translation", headers=hdr(worker["api_key"]))
     assert resp.status_code == 204
 
 

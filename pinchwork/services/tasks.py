@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -42,7 +43,9 @@ def _cleanup_event(tid: str) -> None:
 async def _maybe_spawn_matching(session: AsyncSession, task: Task) -> None:
     """Create a match_agents system task if any infra agents exist."""
     result = await session.execute(
-        select(Agent).where(Agent.accepts_system_tasks == True, Agent.id != settings.platform_agent_id)  # noqa: E712
+        select(Agent).where(
+            Agent.accepts_system_tasks.is_(True), Agent.id != settings.platform_agent_id
+        )
     )
     infra_agents = result.scalars().all()
     if not infra_agents:
@@ -55,15 +58,12 @@ async def _maybe_spawn_matching(session: AsyncSession, task: Task) -> None:
         select(Agent).where(Agent.id != settings.platform_agent_id, Agent.good_at != None)  # noqa: E711
     )
     agents_with_skills = all_agents_result.scalars().all()
-    agent_list = [
-        {"id": a.id, "good_at": a.good_at}
-        for a in agents_with_skills
-    ]
+    agent_list = [{"id": a.id, "good_at": a.good_at} for a in agents_with_skills]
 
     need = (
         f"Match agents for: {task.need}\n\n"
         f"Available agents:\n{json.dumps(agent_list)}\n\n"
-        "Return JSON: {\"ranked_agents\": [\"agent_id_1\", \"agent_id_2\", ...]}"
+        'Return JSON: {"ranked_agents": ["agent_id_1", "agent_id_2", ...]}'
     )
 
     system_tid = make_task_id()
@@ -75,19 +75,21 @@ async def _maybe_spawn_matching(session: AsyncSession, task: Task) -> None:
         is_system=True,
         system_task_type="match_agents",
         parent_task_id=task.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.task_expire_hours),
+        expires_at=datetime.now(UTC) + timedelta(hours=settings.task_expire_hours),
     )
     session.add(system_task)
 
     task.match_status = "pending"
-    task.match_deadline = datetime.now(timezone.utc) + timedelta(seconds=settings.match_timeout_seconds)
+    task.match_deadline = datetime.now(UTC) + timedelta(seconds=settings.match_timeout_seconds)
     session.add(task)
 
 
 async def _maybe_spawn_verification(session: AsyncSession, task: Task) -> None:
     """Create a verify_completion system task if any infra agents exist."""
     result = await session.execute(
-        select(Agent).where(Agent.accepts_system_tasks == True, Agent.id != settings.platform_agent_id)  # noqa: E712
+        select(Agent).where(
+            Agent.accepts_system_tasks.is_(True), Agent.id != settings.platform_agent_id
+        )
     )
     infra_agents = result.scalars().all()
     if not infra_agents:
@@ -96,7 +98,7 @@ async def _maybe_spawn_verification(session: AsyncSession, task: Task) -> None:
     need = (
         f"Verify completion. Task need: {task.need}\n"
         f"Delivery: {task.result}\n\n"
-        "Return JSON: {\"meets_requirements\": true/false, \"explanation\": \"...\"}"
+        'Return JSON: {"meets_requirements": true/false, "explanation": "..."}'
     )
 
     system_tid = make_task_id()
@@ -108,7 +110,7 @@ async def _maybe_spawn_verification(session: AsyncSession, task: Task) -> None:
         is_system=True,
         system_task_type="verify_completion",
         parent_task_id=task.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.task_expire_hours),
+        expires_at=datetime.now(UTC) + timedelta(hours=settings.task_expire_hours),
     )
     session.add(system_task)
 
@@ -159,7 +161,9 @@ async def _process_verify_result(session: AsyncSession, system_task: Task) -> No
         meets = result_data.get("meets_requirements", False)
     except (json.JSONDecodeError, TypeError):
         parent.verification_status = "failed"
-        parent.verification_result = json.dumps({"meets_requirements": False, "explanation": "Failed to parse verification result"})
+        parent.verification_result = json.dumps(
+            {"meets_requirements": False, "explanation": "Failed to parse verification result"}
+        )
         session.add(parent)
         return
 
@@ -219,7 +223,7 @@ async def create_task(
 ) -> dict:
     """Create a task and escrow credits atomically in one transaction."""
     tid = make_task_id()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.task_expire_hours)
+    expires_at = datetime.now(UTC) + timedelta(hours=settings.task_expire_hours)
     tags_json = json.dumps(tags) if tags else None
 
     task = Task(
@@ -292,27 +296,21 @@ async def pickup_task(
 
     # Conflict rule: exclude tasks where this agent did system work
     # (i.e., tasks whose parent_task_id points to a task where worker_id = me)
-    conflict_subquery = (
-        select(Task.parent_task_id)
-        .where(
-            Task.is_system == True,  # noqa: E712
-            Task.worker_id == worker_id,
-            Task.parent_task_id != None,  # noqa: E711
-        )
+    conflict_subquery = select(Task.parent_task_id).where(
+        Task.is_system == True,  # noqa: E712
+        Task.worker_id == worker_id,
+        Task.parent_task_id != None,  # noqa: E711
     )
 
     # Phase 1: Matched tasks (tasks where this agent has a TaskMatch row)
     matched_subquery = select(TaskMatch.task_id).where(TaskMatch.agent_id == worker_id)
-    query = (
-        select(Task)
-        .where(
-            Task.status == TaskStatus.posted,
-            Task.poster_id != worker_id,
-            Task.is_system == False,  # noqa: E712
-            Task.match_status == "matched",
-            Task.id.in_(matched_subquery),
-            Task.id.not_in(conflict_subquery),
-        )
+    query = select(Task).where(
+        Task.status == TaskStatus.posted,
+        Task.poster_id != worker_id,
+        Task.is_system == False,  # noqa: E712
+        Task.match_status == "matched",
+        Task.id.in_(matched_subquery),
+        Task.id.not_in(conflict_subquery),
     )
 
     if tags:
@@ -408,7 +406,7 @@ async def _try_claim(session: AsyncSession, task: Task, worker_id: str) -> dict 
             "UPDATE tasks SET status = 'claimed', worker_id = :worker_id, "
             "claimed_at = :now WHERE id = :id AND status = 'posted'"
         ),
-        {"worker_id": worker_id, "now": datetime.now(timezone.utc).isoformat(), "id": task.id},
+        {"worker_id": worker_id, "now": datetime.now(UTC).isoformat(), "id": task.id},
     )
     if claim_result.rowcount == 0:
         return None
@@ -449,7 +447,7 @@ async def deliver_task(
     task.status = TaskStatus.delivered
     task.result = result
     task.credits_charged = actual_credits
-    task.delivered_at = datetime.now(timezone.utc)
+    task.delivered_at = datetime.now(UTC)
     session.add(task)
 
     # Process system task results
@@ -540,7 +538,7 @@ async def reject_task(session: AsyncSession, tid: str, poster_id: str) -> dict:
     task.credits_charged = None
     task.delivered_at = None
     task.claimed_at = None
-    task.expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.task_expire_hours)
+    task.expires_at = datetime.now(UTC) + timedelta(hours=settings.task_expire_hours)
     session.add(task)
     await session.commit()
 
@@ -563,7 +561,9 @@ async def cancel_task(session: AsyncSession, tid: str, poster_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Task not found")
     status = task.status.value if isinstance(task.status, TaskStatus) else task.status
     if status != "posted":
-        raise HTTPException(status_code=409, detail=f"Task is {status}, can only cancel posted tasks")
+        raise HTTPException(
+            status_code=409, detail=f"Task is {status}, can only cancel posted tasks"
+        )
     if task.poster_id != poster_id:
         raise HTTPException(status_code=403, detail="Not your task")
 
@@ -589,10 +589,8 @@ async def cancel_task(session: AsyncSession, tid: str, poster_id: str) -> dict:
 async def wait_for_result(session: AsyncSession, tid: str, timeout: int) -> dict | None:
     """Wait for task delivery using asyncio.Event instead of polling."""
     event = _get_event(tid)
-    try:
+    with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(event.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
-        pass
 
     # Re-fetch the task state after waiting
     await session.expire_all()

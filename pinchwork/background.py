@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ logger = logging.getLogger("pinchwork.background")
 
 
 async def expire_tasks(session: AsyncSession) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     result = await session.execute(
         select(Task).where(Task.status == TaskStatus.posted, Task.expires_at < now)
     )
@@ -29,7 +29,9 @@ async def expire_tasks(session: AsyncSession) -> int:
         task.status = TaskStatus.expired
         session.add(task)
         await refund(session, task.id, task.poster_id, task.max_credits)
-        logger.info("Expired task %s, refunded %d credits to %s", task.id, task.max_credits, task.poster_id)
+        logger.info(
+            "Expired task %s, refunded %d credits to %s", task.id, task.max_credits, task.poster_id
+        )
 
     if tasks:
         await session.commit()
@@ -73,7 +75,7 @@ async def auto_approve_tasks(session: AsyncSession) -> int:
 
 async def expire_matching(session: AsyncSession) -> int:
     """Expire pending matches that passed their deadline, fall back to broadcast."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     result = await session.execute(
         select(Task).where(
             Task.match_status == "pending",
@@ -152,8 +154,11 @@ async def background_loop(session_factory: sessionmaker) -> None:
                 sys_approved = await auto_approve_system_tasks(session)
                 if expired or approved or match_expired or sys_approved:
                     logger.info(
-                        "Background: expired=%d, auto_approved=%d, match_expired=%d, sys_approved=%d",
-                        expired, approved, match_expired, sys_approved,
+                        "Background: expired=%d, approved=%d, match_exp=%d, sys=%d",
+                        expired,
+                        approved,
+                        match_expired,
+                        sys_approved,
                     )
         except Exception:
             logger.exception("Background task error")

@@ -18,11 +18,15 @@ async def record_credit(
     reason: str,
     task_id: str | None = None,
 ) -> None:
-    entry = CreditLedger(id=ledger_id(), agent_id=agent_id, amount=amount, reason=reason, task_id=task_id)
+    entry = CreditLedger(
+        id=ledger_id(), agent_id=agent_id, amount=amount, reason=reason, task_id=task_id
+    )
     session.add(entry)
 
 
-async def escrow(session: AsyncSession, poster_id: str, task_id: str, amount: int, *, is_system: bool = False) -> None:
+async def escrow(
+    session: AsyncSession, poster_id: str, task_id: str, amount: int, *, is_system: bool = False
+) -> None:
     """Atomic escrow: single UPDATE with balance check to prevent race conditions.
 
     System tasks skip escrow entirely (platform agent has infinite credits).
@@ -31,17 +35,16 @@ async def escrow(session: AsyncSession, poster_id: str, task_id: str, amount: in
         return
 
     result = await session.execute(
-        text(
-            "UPDATE agents SET credits = credits - :amount "
-            "WHERE id = :id AND credits >= :amount"
-        ),
+        text("UPDATE agents SET credits = credits - :amount WHERE id = :id AND credits >= :amount"),
         {"amount": amount, "id": poster_id},
     )
     if result.rowcount == 0:
         # Fetch current balance for error message
         agent = await session.get(Agent, poster_id)
         have = agent.credits if agent else 0
-        raise HTTPException(status_code=402, detail=f"Insufficient credits. Have {have}, need {amount}")
+        raise HTTPException(
+            status_code=402, detail=f"Insufficient credits. Have {have}, need {amount}"
+        )
 
     await record_credit(session, poster_id, -amount, "escrow", task_id)
 

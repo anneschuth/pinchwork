@@ -24,7 +24,9 @@ router = APIRouter()
 
 
 @router.post("/v1/tasks")
-async def delegate_task(request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def delegate_task(
+    request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     body = await parse_body(request)
 
     # Bug #16: validate through Pydantic model
@@ -54,7 +56,9 @@ async def delegate_task(request: Request, agent: Agent = AuthAgent, session=Depe
 
 
 @router.get("/v1/tasks/{task_id}")
-async def poll_task(request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def poll_task(
+    request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     task = await get_task(session, task_id)
     if not task:
         return render_response(request, {"error": "Task not found"}, status_code=404)
@@ -66,7 +70,12 @@ async def poll_task(request: Request, task_id: str, agent: Agent = AuthAgent, se
 
 
 @router.post("/v1/tasks/pickup")
-async def pickup(request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session), tags: str | None = None):
+async def pickup(
+    request: Request,
+    agent: Agent = AuthAgent,
+    session=Depends(get_db_session),
+    tags: str | None = None,
+):
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     task = await pickup_task(session, agent.id, tags=tag_list)
     if not task:
@@ -81,7 +90,9 @@ async def pickup(request: Request, agent: Agent = AuthAgent, session=Depends(get
 
 
 @router.post("/v1/tasks/{task_id}/deliver")
-async def deliver(request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def deliver(
+    request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     body = await parse_body(request)
     result = body.get("result", "")
     if not result:
@@ -99,18 +110,24 @@ async def deliver(request: Request, task_id: str, agent: Agent = AuthAgent, sess
 
 
 @router.post("/v1/tasks/{task_id}/approve")
-async def approve(request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def approve(
+    request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     task = await approve_task(session, task_id, agent.id)
     return render_task_result(request, task)
 
 
 @router.post("/v1/tasks/{task_id}/reject")
-async def reject(request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def reject(
+    request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     task = await reject_task(session, task_id, agent.id)
     return render_task_result(request, task)
 
 
 @router.post("/v1/tasks/{task_id}/cancel")
-async def cancel(request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)):
+async def cancel(
+    request: Request, task_id: str, agent: Agent = AuthAgent, session=Depends(get_db_session)
+):
     task = await cancel_task(session, task_id, agent.id)
     return render_task_result(request, task)

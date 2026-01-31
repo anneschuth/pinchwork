@@ -10,7 +10,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
 from pinchwork.config import settings
-from pinchwork.db_models import Agent, CreditLedger, Rating, Task, TaskMatch  # noqa: F401 — register tables
+from pinchwork.db_models import (  # noqa: F401 — register tables
+    Agent,
+    CreditLedger,
+    Rating,
+    Task,
+    TaskMatch,
+)
 
 logger = logging.getLogger("pinchwork.database")
 
@@ -29,12 +35,8 @@ async def init_db(url: str = "sqlite+aiosqlite:///pinchwork.db") -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
         if "sqlite" in url:
-            await conn.execute(
-                __import__("sqlalchemy").text("PRAGMA journal_mode=WAL")
-            )
-            await conn.execute(
-                __import__("sqlalchemy").text("PRAGMA foreign_keys=ON")
-            )
+            await conn.execute(__import__("sqlalchemy").text("PRAGMA journal_mode=WAL"))
+            await conn.execute(__import__("sqlalchemy").text("PRAGMA foreign_keys=ON"))
 
     await _ensure_platform_agent()
 

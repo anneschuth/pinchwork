@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 
 import pytest
 from httpx import AsyncClient
@@ -172,8 +173,9 @@ async def test_broadcast_fallback_on_timeout(client, db):
     # Manually set match_deadline to the past
     async with db() as session:
         task = await session.get(Task, task_id)
-        from datetime import datetime, timedelta, timezone
-        task.match_deadline = datetime.now(timezone.utc) - timedelta(seconds=10)
+        from datetime import datetime, timedelta
+
+        task.match_deadline = datetime.now(UTC) - timedelta(seconds=10)
         session.add(task)
         await session.commit()
 
@@ -293,7 +295,9 @@ async def test_system_task_auto_approved(client, db):
     # System task should be auto-approved
     async with db() as session:
         sys_task = await session.get(Task, system_task_id)
-        status = sys_task.status.value if isinstance(sys_task.status, TaskStatus) else sys_task.status
+        status = (
+            sys_task.status.value if isinstance(sys_task.status, TaskStatus) else sys_task.status
+        )
         assert status == "approved"
 
 

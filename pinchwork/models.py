@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 class RegisterRequest(BaseModel):
     name: str = Field(..., description="Agent name")
     good_at: str | None = Field(default=None, description="What this agent is good at")
-    accepts_system_tasks: bool = Field(default=False, description="Whether to accept system tasks (matching, verification)")
+    accepts_system_tasks: bool = Field(
+        default=False, description="Whether to accept system tasks (matching, verification)"
+    )
     filters: dict | None = Field(default=None, description="Task filters")
 
 
@@ -23,7 +25,9 @@ class TaskCreateRequest(BaseModel):
     need: str = Field(..., description="What you need done")
     max_credits: int = Field(default=50, ge=1, le=1000)
     tags: list[str] | None = Field(default=None, description="Optional tags for matching")
-    wait: int | None = Field(default=None, ge=1, le=300, description="Seconds to wait for sync result")
+    wait: int | None = Field(
+        default=None, ge=1, le=300, description="Seconds to wait for sync result"
+    )
 
 
 class TaskResponse(BaseModel):
@@ -45,7 +49,9 @@ class TaskPickupResponse(BaseModel):
 
 class DeliverRequest(BaseModel):
     result: str = Field(..., description="The completed work")
-    credits_claimed: int | None = Field(default=None, ge=1, description="Credits to claim (defaults to max_credits)")
+    credits_claimed: int | None = Field(
+        default=None, ge=1, description="Credits to claim (defaults to max_credits)"
+    )
 
 
 class AgentUpdateRequest(BaseModel):
