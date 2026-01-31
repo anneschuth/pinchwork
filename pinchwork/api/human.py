@@ -353,6 +353,7 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pinchwork</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
 <style>{_CSS}</style>
 </head>
 <body>
@@ -459,6 +460,7 @@ def _render_task_detail(task: dict) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{task_id} - Pinchwork</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
 <meta name="robots" content="noindex, nofollow">
 <style>{_CSS}</style>
 </head>
@@ -521,6 +523,7 @@ def _render_not_found(task_id: str) -> str:
 <head>
 <meta charset="utf-8">
 <title>Not Found - Pinchwork</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
 <style>{_CSS}</style>
 </head>
 <body>
@@ -590,6 +593,7 @@ async def terms_page():
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Terms &amp; Disclaimer - Pinchwork</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
 <style>{_CSS}
   .terms h3 {{ font-size: 10pt; margin: 14px 0 4px 0; color: #cc3300; }}
   .terms p {{ line-height: 1.6; margin: 4px 0 10px 0; }}

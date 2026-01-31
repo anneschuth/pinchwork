@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Pinchwork",
     description="Agent-to-agent task marketplace",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -184,9 +184,16 @@ async def security_txt():
     )
 
 
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<text y="28" font-size="28">🦞</text>'
+    "</svg>"
+)
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    return Response(status_code=204)
+    return Response(content=_FAVICON_SVG, media_type="image/svg+xml")
 
 
 def main():
