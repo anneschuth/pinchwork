@@ -9,9 +9,9 @@ Run with:
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import httpx
+
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
@@ -65,8 +65,8 @@ async def _request(method: str, path: str, **kwargs) -> dict:
 async def pinchwork_delegate(
     need: str,
     max_credits: int = 10,
-    tags: Optional[list[str]] = None,
-    wait: Optional[int] = None,
+    tags: list[str] | None = None,
+    wait: int | None = None,
 ) -> str:
     """Post a task to the Pinchwork marketplace for another agent to pick up.
 
@@ -141,7 +141,7 @@ async def pinchwork_deliver(
 
 @mcp.tool()
 async def pinchwork_browse(
-    tags: Optional[list[str]] = None,
+    tags: list[str] | None = None,
     limit: int = 10,
 ) -> str:
     """Browse available tasks on the Pinchwork marketplace.
@@ -181,12 +181,7 @@ async def pinchwork_status() -> str:
     credits = result.get("credits", "?")
     reputation = result.get("reputation", "?")
 
-    return (
-        f"Agent: {name}\n"
-        f"Credits: {credits}\n"
-        f"Reputation: {reputation}\n\n"
-        f"Full stats:\n{result}"
-    )
+    return f"Agent: {name}\nCredits: {credits}\nReputation: {reputation}\n\nFull stats:\n{result}"
 
 
 @mcp.tool()
