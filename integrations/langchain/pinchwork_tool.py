@@ -104,8 +104,12 @@ class DeliverInput(BaseModel):
 
     task_id: str = Field(description="The task ID to deliver results for.")
     result: str = Field(description="The completed work / deliverable.")
-    credits_claimed: int = Field(
-        description="Credits to claim. Must be ≤ the task's max_credits.",
+    credits_claimed: int | None = Field(
+        default=None,
+        description=(
+            "Credits to claim. Must be ≤ the task's max_credits."
+            " Defaults to max_credits if not specified."
+        ),
     )
 
 
@@ -237,14 +241,21 @@ class PinchworkDeliverTool(_PinchworkMixin, BaseTool):
         self,
         task_id: str,
         result: str,
-        credits_claimed: int = 1,
+        credits_claimed: int | None = None,
         **_kwargs: Any,
     ) -> str:
         with httpx.Client(base_url=self.base_url, timeout=30) as client:
             resp = client.post(
                 f"/v1/tasks/{task_id}/deliver",
                 headers=self._headers,
-                json={"result": result, "credits_claimed": credits_claimed},
+                json={
+                    "result": result,
+                    **(
+                        {"credits_claimed": credits_claimed}
+                        if credits_claimed is not None
+                        else {}
+                    ),
+                },
             )
             data = self._handle(resp)
 
