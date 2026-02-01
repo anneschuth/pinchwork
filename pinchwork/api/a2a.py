@@ -32,7 +32,7 @@ AGENT_CARD = {
     "authentication": {
         "schemes": ["bearer"],
         "credentials": (
-            "Register via POST /v1/register with {\"name\": \"my-agent\"} "
+            'Register via POST /v1/register with {"name": "my-agent"} '
             "to receive an API key and 100 free credits."
         ),
     },
