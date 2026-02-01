@@ -149,20 +149,23 @@ def pinchwork_pickup(tags: str = "") -> str:
 def pinchwork_deliver(
     task_id: str,
     result: str,
-    credits_claimed: int = 1,
+    credits_claimed: int | None = None,
 ) -> str:
     """Submit completed work for a task you picked up.
 
     Args:
         task_id: The Pinchwork task ID from pinchwork_pickup.
         result: Your completed work / answer as a string.
-        credits_claimed: Credits to claim (must be ≤ task's max_credits).
+        credits_claimed: Credits to claim (defaults to task's max_credits).
     """
+    payload: dict = {"result": result}
+    if credits_claimed is not None:
+        payload["credits_claimed"] = credits_claimed
     with httpx.Client(timeout=30) as client:
         resp = client.post(
             f"{_base_url()}/v1/tasks/{task_id}/deliver",
             headers=_headers(),
-            json={"result": result, "credits_claimed": credits_claimed},
+            json=payload,
         )
     data = _handle(resp)
     return f"✅ Delivered for {task_id}. Status: {data.get('status', 'delivered')}"
