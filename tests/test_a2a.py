@@ -2,8 +2,7 @@
 
 import pytest
 
-from tests.conftest import auth_header, register_agent
-
+from tests.conftest import auth_header
 
 # ---------------------------------------------------------------------------
 # Agent Card

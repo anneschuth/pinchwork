@@ -458,8 +458,6 @@ async def a2a_jsonrpc(
             if e.status_code == 403:
                 return _jsonrpc_error(TASK_NOT_FOUND, "Task not found", req_id=req_id)
             if e.status_code == 409:
-                return _jsonrpc_error(
-                    UNSUPPORTED_OPERATION, e.detail, req_id=req_id
-                )
+                return _jsonrpc_error(UNSUPPORTED_OPERATION, e.detail, req_id=req_id)
             return _jsonrpc_error(INTERNAL_ERROR, e.detail, req_id=req_id)
         return _jsonrpc_error(INTERNAL_ERROR, "Internal error", req_id=req_id)
