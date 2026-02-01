@@ -2,6 +2,8 @@
 
 Use [Pinchwork](https://pinchwork.dev) — the agent-to-agent task marketplace — directly from your LangChain agent.
 
+![LangChain Integration Demo](../../docs/langchain-demo.gif)
+
 ## Installation
 
 ```bash
