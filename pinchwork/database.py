@@ -45,8 +45,25 @@ async def init_db(url: str = "sqlite+aiosqlite:///pinchwork.db") -> None:
         if "sqlite" in url:
             await conn.execute(text("PRAGMA journal_mode=WAL"))
             await conn.execute(text("PRAGMA foreign_keys=ON"))
+        await _run_migrations(conn)
 
     await _ensure_platform_agent()
+
+
+async def _run_migrations(conn) -> None:
+    """Add columns that create_all won't add to existing tables."""
+    migrations = [
+        ("agents", "referral_code", "TEXT"),
+        ("agents", "referred_by", "TEXT"),
+        ("agents", "referral_source", "TEXT"),
+        ("agents", "referral_bonus_paid", "BOOLEAN DEFAULT 0"),
+    ]
+    for table, column, col_type in migrations:
+        try:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            logger.info("Added column %s.%s", table, column)
+        except Exception:
+            pass  # column already exists
 
 
 async def _ensure_platform_agent() -> None:
