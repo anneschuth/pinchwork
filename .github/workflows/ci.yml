@@ -21,7 +21,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra langchain --extra mcp --extra crewai --frozen
+        run: uv sync --extra dev --frozen
 
       - name: Pre-commit checks
         uses: pre-commit/action@v3.0.1
