@@ -9,6 +9,7 @@ Run with:
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 
@@ -33,10 +34,8 @@ def _api_key() -> str:
     return key
 
 
-mcp = FastMCP("Pinchwork")
-
 # ---------------------------------------------------------------------------
-# Shared async client (connection pooling)
+# Shared async client (connection pooling) with lifespan cleanup
 # ---------------------------------------------------------------------------
 
 _client: httpx.AsyncClient | None = None
@@ -47,6 +46,22 @@ async def _get_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(timeout=130)  # > max wait (120s)
     return _client
+
+
+@asynccontextmanager
+async def _lifespan():
+    """Manage the shared httpx client lifecycle."""
+    global _client
+    _client = httpx.AsyncClient(timeout=130)
+    try:
+        yield
+    finally:
+        if _client and not _client.is_closed:
+            await _client.aclose()
+        _client = None
+
+
+mcp = FastMCP("Pinchwork", lifespan=_lifespan)
 
 
 async def _request(method: str, path: str, **kwargs) -> dict:
