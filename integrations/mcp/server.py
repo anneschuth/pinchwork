@@ -12,7 +12,6 @@ import os
 from contextlib import asynccontextmanager
 
 import httpx
-
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
