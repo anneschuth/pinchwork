@@ -33,6 +33,9 @@ crewai = [
     "crewai>=0.80.0",
     "httpx>=0.27.0",
 ]
+all = [
+    "pinchwork[langchain,mcp,crewai]",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24.0",
