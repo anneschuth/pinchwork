@@ -14,6 +14,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from slowapi.middleware import SlowAPIMiddleware
 
+from pinchwork.api.a2a import router as a2a_router
 from pinchwork.api.router import api_router
 from pinchwork.background import background_loop
 from pinchwork.config import settings
@@ -68,6 +69,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
+app.include_router(a2a_router)
 app.include_router(api_router)
 
 
