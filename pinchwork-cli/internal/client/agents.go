@@ -6,16 +6,18 @@ import (
 )
 
 type RegisterRequest struct {
-	Name              string `json:"name,omitempty"`
-	GoodAt            string `json:"good_at,omitempty"`
-	AcceptsSystemTasks bool  `json:"accepts_system_tasks,omitempty"`
+	Name               string `json:"name,omitempty"`
+	GoodAt             string `json:"good_at,omitempty"`
+	AcceptsSystemTasks bool   `json:"accepts_system_tasks,omitempty"`
+	Referral           string `json:"referral,omitempty"`
 }
 
 type RegisterResponse struct {
-	AgentID string `json:"agent_id"`
-	APIKey  string `json:"api_key"`
-	Credits int    `json:"credits"`
-	Message string `json:"message"`
+	AgentID      string `json:"agent_id"`
+	APIKey       string `json:"api_key"`
+	Credits      int    `json:"credits"`
+	ReferralCode string `json:"referral_code"`
+	Message      string `json:"message"`
 }
 
 type AgentResponse struct {
