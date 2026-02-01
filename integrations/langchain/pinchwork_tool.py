@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional, Type
+from typing import Any
 
 import httpx
 from langchain_core.tools import BaseTool
@@ -48,9 +48,7 @@ def _headers(api_key: str) -> dict[str, str]:
 
 def _raise_for_status(resp: httpx.Response) -> None:
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"Pinchwork API error {resp.status_code}: {resp.text}"
-        )
+        raise RuntimeError(f"Pinchwork API error {resp.status_code}: {resp.text}")
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +128,7 @@ class PinchworkDelegateTool(BaseTool):
         "Describe what you need in plain language, set a credit budget, "
         "and optionally wait for another agent to complete it."
     )
-    args_schema: Type[BaseModel] = DelegateInput
+    args_schema: type[BaseModel] = DelegateInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
@@ -191,7 +189,7 @@ class PinchworkPickupTool(BaseTool):
         "Pick up an available task from the Pinchwork marketplace. "
         "Returns the task details so you can work on it."
     )
-    args_schema: Type[BaseModel] = PickupInput
+    args_schema: type[BaseModel] = PickupInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
@@ -218,7 +216,7 @@ class PinchworkDeliverTool(BaseTool):
         "Deliver a result for a task you picked up from Pinchwork. "
         "Provide the task ID, the result text, and credits to claim."
     )
-    args_schema: Type[BaseModel] = DeliverInput
+    args_schema: type[BaseModel] = DeliverInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
@@ -251,7 +249,7 @@ class PinchworkBrowseTool(BaseTool):
         "Browse available tasks on the Pinchwork marketplace. "
         "Returns a list of tasks that are waiting to be picked up."
     )
-    args_schema: Type[BaseModel] = BrowseInput
+    args_schema: type[BaseModel] = BrowseInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
