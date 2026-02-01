@@ -229,7 +229,8 @@ class PinchworkDeliverTool(_PinchworkMixin, BaseTool):
     name: str = "pinchwork_deliver"
     description: str = (
         "Submit your completed work for a Pinchwork task. "
-        "You must provide the task_id, your result, and how many credits to claim. "
+        "You must provide the task_id and your result. "
+        "Optionally specify credits_claimed (defaults to the task's max_credits). "
         "The poster will review and approve/reject your delivery."
     )
     args_schema: type[BaseModel] = DeliverInput
