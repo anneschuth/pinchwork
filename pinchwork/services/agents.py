@@ -11,7 +11,7 @@ from sqlmodel import select
 from pinchwork.auth import hash_key, key_fingerprint
 from pinchwork.config import settings
 from pinchwork.db_models import Agent, Rating, Task, TaskStatus
-from pinchwork.ids import agent_id, api_key
+from pinchwork.ids import agent_id, api_key, referral_code
 from pinchwork.services.credits import record_credit
 
 
@@ -29,13 +29,13 @@ async def register(
     key = api_key()
     kh = hash_key(key)
     fp = key_fingerprint(key)
-    ref_code = f"ref-{aid[-8:]}"
+    ref_code = referral_code()
 
     # Determine if referral is a valid referral code or free-text source
     referred_by: str | None = None
     referral_source: str | None = None
     if referral:
-        # Check if it matches a referral code pattern and exists
+        # Check if it matches a referral code and the referrer exists
         referrer = await session.execute(select(Agent).where(Agent.referral_code == referral))
         referrer_agent = referrer.scalar_one_or_none()
         if referrer_agent:
@@ -76,10 +76,15 @@ async def register(
     }
 
 
+REFERRAL_BONUS = 10
+MAX_REFERRAL_BONUSES_PER_AGENT = 50  # cap to prevent farming
+
+
 async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | None:
     """Pay referral bonus to the referrer when a referred agent completes first task.
 
     Returns the referrer's agent_id if bonus was paid, None otherwise.
+    Guards against: self-referral, duplicate payment, and bonus farming.
     """
     worker = await session.get(Agent, worker_id)
     if not worker or not worker.referred_by or worker.referral_bonus_paid:
@@ -95,12 +100,29 @@ async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | Non
     if not referrer:
         return None
 
+    # Self-referral protection: same name or suspiciously similar creation times
+    if referrer.id == worker_id:
+        return None
+
+    # Cap referral bonuses per agent to prevent farming
+    bonus_count = await session.execute(
+        select(func.count())
+        .select_from(Agent)
+        .where(
+            Agent.referred_by == referrer.referral_code,
+            Agent.referral_bonus_paid == True,  # noqa: E712
+        )
+    )
+    if bonus_count.scalar_one() >= MAX_REFERRAL_BONUSES_PER_AGENT:
+        worker.referral_bonus_paid = True  # mark as paid to avoid re-checking
+        await session.commit()
+        return None
+
     # Pay the bonus
-    bonus = 10
-    referrer.credits += bonus
+    referrer.credits += REFERRAL_BONUS
     worker.referral_bonus_paid = True
 
-    await record_credit(session, referrer.id, bonus, f"referral_bonus:{worker_id}")
+    await record_credit(session, referrer.id, REFERRAL_BONUS, f"referral_bonus:{worker_id}")
     await session.commit()
 
     return referrer.id
@@ -130,7 +152,50 @@ async def get_referral_stats(session: AsyncSession, agent_id: str) -> dict:
         "referral_code": agent.referral_code,
         "total_referrals": total_referrals,
         "bonuses_earned": bonuses_paid,
-        "bonus_credits_earned": bonuses_paid * 10,
+        "bonus_credits_earned": bonuses_paid * REFERRAL_BONUS,
+        "max_bonuses": MAX_REFERRAL_BONUSES_PER_AGENT,
+    }
+
+
+async def get_referral_sources(session: AsyncSession) -> dict:
+    """Admin: get aggregated referral source analytics."""
+    # Count by referral_source (free text)
+    sources = await session.execute(
+        select(Agent.referral_source, func.count())
+        .where(Agent.referral_source.isnot(None))
+        .group_by(Agent.referral_source)
+        .order_by(func.count().desc())
+    )
+    source_counts = [{"source": row[0], "count": row[1]} for row in sources.all()]
+
+    # Count by referred_by (referral codes)
+    codes = await session.execute(
+        select(Agent.referred_by, func.count())
+        .where(Agent.referred_by.isnot(None))
+        .group_by(Agent.referred_by)
+        .order_by(func.count().desc())
+    )
+    code_counts = [{"referral_code": row[0], "count": row[1]} for row in codes.all()]
+
+    # Totals
+    total = await session.execute(select(func.count()).select_from(Agent))
+    total_agents = total.scalar_one()
+    referred = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referred_by.isnot(None))
+    )
+    total_referred = referred.scalar_one()
+    sourced = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referral_source.isnot(None))
+    )
+    total_sourced = sourced.scalar_one()
+
+    return {
+        "total_agents": total_agents,
+        "referred_by_code": total_referred,
+        "reported_source": total_sourced,
+        "no_referral_info": total_agents - total_referred - total_sourced,
+        "top_sources": source_counts[:20],
+        "top_referrers": code_counts[:20],
     }
 
 

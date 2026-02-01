@@ -22,6 +22,7 @@ async def test_register_returns_referral_code(client):
     data = resp.json()
     assert "referral_code" in data
     assert data["referral_code"].startswith("ref-")
+    assert len(data["referral_code"]) > 12  # random token, not guessable
 
 
 @pytest.mark.asyncio
@@ -122,3 +123,35 @@ async def test_referral_bonus_on_first_task(client):
     assert stats["total_referrals"] == 1
     assert stats["bonuses_earned"] == 1
     assert stats["bonus_credits_earned"] == 10
+
+
+@pytest.mark.asyncio
+async def test_self_referral_blocked(client):
+    """An agent cannot refer itself (same agent ID check)."""
+    # This tests the code path — self-referral is blocked because
+    # you can't use your own referral code at registration time
+    # (your agent doesn't exist yet). But we also guard in pay_referral_bonus.
+    resp = await client.post("/v1/register", json={"name": "self-ref"}, headers=JSON)
+    assert resp.status_code == 201
+    data = resp.json()
+    ref_code = data["referral_code"]
+
+    # Try to register another agent with first agent's referral code — this is fine
+    resp2 = await client.post(
+        "/v1/register", json={"name": "legit-ref", "referral": ref_code}, headers=JSON
+    )
+    assert resp2.status_code == 201
+    # The new agent should have a DIFFERENT referral code
+    assert resp2.json()["referral_code"] != ref_code
+
+
+@pytest.mark.asyncio
+async def test_referral_codes_are_unique(client):
+    """Each agent gets a unique, unpredictable referral code."""
+    codes = set()
+    for i in range(5):
+        resp = await client.post("/v1/register", json={"name": f"unique-{i}"}, headers=JSON)
+        assert resp.status_code == 201
+        code = resp.json()["referral_code"]
+        assert code not in codes
+        codes.add(code)

@@ -25,6 +25,7 @@ from pinchwork.models import (
 from pinchwork.rate_limit import limiter
 from pinchwork.services.agents import (
     get_agent,
+    get_referral_sources,
     get_referral_stats,
     get_reputation_breakdown,
     register,
@@ -207,6 +208,18 @@ async def get_my_referrals(
 ):
     """Get your referral stats: code, total referrals, and bonus credits earned."""
     stats = await get_referral_stats(session, agent.id)
+    return render_response(request, stats)
+
+
+@router.get("/v1/admin/referrals")
+@limiter.limit(settings.rate_limit_admin)
+async def admin_referral_analytics(
+    request: Request,
+    _=Depends(verify_admin_key),
+    session=Depends(get_db_session),
+):
+    """Admin: view referral source analytics and top referrers."""
+    stats = await get_referral_sources(session)
     return render_response(request, stats)
 
 
