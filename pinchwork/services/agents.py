@@ -85,26 +85,17 @@ async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | Non
 
     Returns the referrer's agent_id if bonus was paid, None otherwise.
     Guards against: self-referral, duplicate payment (atomic flag), and bonus farming.
-    """
-    # Atomic claim: set referral_bonus_paid = True only if it was False.
-    # This prevents race conditions if two tasks approve concurrently.
-    result = await session.execute(
-        text(
-            "UPDATE agents SET referral_bonus_paid = TRUE"
-            " WHERE id = :wid AND referral_bonus_paid = FALSE AND referred_by IS NOT NULL"
-            " RETURNING referred_by"
-        ),
-        {"wid": worker_id},
-    )
-    row = result.fetchone()
-    if not row:
-        return None  # already paid, no referral, or agent not found
 
-    referred_by_code = row[0]
+    All validation happens BEFORE the atomic flag update to avoid burning the flag
+    on failed checks.
+    """
+    worker = await session.get(Agent, worker_id)
+    if not worker or not worker.referred_by or worker.referral_bonus_paid:
+        return None
 
     # Find the referrer by referral code
     referrer_result = await session.execute(
-        select(Agent).where(Agent.referral_code == referred_by_code)
+        select(Agent).where(Agent.referral_code == worker.referred_by)
     )
     referrer = referrer_result.scalar_one_or_none()
     if not referrer:
@@ -123,11 +114,31 @@ async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | Non
             Agent.referral_bonus_paid == True,  # noqa: E712
         )
     )
-    if bonus_count.scalar_one() > MAX_REFERRAL_BONUSES_PER_AGENT:
+    if bonus_count.scalar_one() >= MAX_REFERRAL_BONUSES_PER_AGENT:
         return None
 
-    # Pay the bonus
-    referrer.credits += REFERRAL_BONUS
+    # Atomic claim: set referral_bonus_paid = True only if still False.
+    # This prevents double-payment if two tasks approve concurrently.
+    result = await session.execute(
+        text(
+            "UPDATE agents SET referral_bonus_paid = TRUE"
+            " WHERE id = :wid AND referral_bonus_paid = FALSE"
+            " RETURNING id"
+        ),
+        {"wid": worker_id},
+    )
+    if not result.fetchone():
+        return None  # lost the race — another task already claimed it
+
+    # Refresh the worker object so ORM doesn't overwrite our atomic UPDATE
+    await session.refresh(worker)
+
+    # Pay the bonus via atomic credit increment
+    await session.execute(
+        text("UPDATE agents SET credits = credits + :bonus WHERE id = :rid"),
+        {"bonus": REFERRAL_BONUS, "rid": referrer.id},
+    )
+    await session.refresh(referrer)
     await record_credit(session, referrer.id, REFERRAL_BONUS, f"referral_bonus:{worker_id}")
 
     return referrer.id
