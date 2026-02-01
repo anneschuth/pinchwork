@@ -11,13 +11,21 @@ from tests.conftest import auth_header
 
 @pytest.mark.asyncio
 async def test_agent_card(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "Pinchwork"
     assert data["capabilities"]["streaming"] is False
     assert data["capabilities"]["pushNotifications"] is False
     assert len(data["skills"]) >= 4
+
+
+@pytest.mark.asyncio
+async def test_agent_card_legacy_redirect(client):
+    """Legacy /.well-known/agent-card.json redirects to /.well-known/agent.json."""
+    resp = await client.get("/.well-known/agent-card.json", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/.well-known/agent.json"
 
 
 # ---------------------------------------------------------------------------

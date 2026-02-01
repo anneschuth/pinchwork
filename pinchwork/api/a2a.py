@@ -1,7 +1,8 @@
 """A2A Protocol endpoints: Agent Card + JSON-RPC 2.0.
 
-Serves the Pinchwork Agent Card at /.well-known/agent-card.json
-and implements a JSON-RPC 2.0 endpoint at /a2a for the A2A protocol.
+Serves the Pinchwork Agent Card at /.well-known/agent.json (A2A spec)
+and /.well-known/agent-card.json (legacy), plus a JSON-RPC 2.0 endpoint
+at /a2a for the A2A protocol.
 
 Supported methods:
 - message/send  → Create a task from an A2A message
@@ -15,11 +16,11 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from pinchwork.auth import get_current_agent
 from pinchwork.database import get_db_session
@@ -142,9 +143,9 @@ AGENT_CARD = {
 }
 
 
-@router.get("/.well-known/agent-card.json")
+@router.get("/.well-known/agent.json")
 async def agent_card() -> JSONResponse:
-    """Serve the A2A Agent Card for Pinchwork."""
+    """Serve the A2A Agent Card for Pinchwork (spec-recommended path)."""
     return JSONResponse(
         content=AGENT_CARD,
         headers={
@@ -153,6 +154,12 @@ async def agent_card() -> JSONResponse:
             "Cache-Control": "public, max-age=3600",
         },
     )
+
+
+@router.get("/.well-known/agent-card.json")
+async def agent_card_legacy() -> RedirectResponse:
+    """Redirect legacy agent card path to the spec-recommended path."""
+    return RedirectResponse(url="/.well-known/agent.json", status_code=301)
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +220,7 @@ def _task_to_a2a(task: dict) -> dict:
     }
     a2a_status = status_map.get(task.get("status", ""), "unknown")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     a2a_task: dict[str, Any] = {
         "id": task["id"],
@@ -321,6 +328,7 @@ async def _handle_message_send(
         raise ValueError(
             f"Invalid max_credits: must be a positive integer, got {max_credits!r}"
         )
+    max_credits = int(max_credits)
 
     # Create the task via existing service
     task = await create_task(
@@ -464,7 +472,6 @@ async def a2a_jsonrpc(
         if e.status_code == 409:
             return _jsonrpc_error(UNSUPPORTED_OPERATION, e.detail, req_id=req_id)
         return _jsonrpc_error(INTERNAL_ERROR, e.detail, req_id=req_id)
-    except Exception as e:
+    except Exception:
         logger.exception("A2A handler error for method %s", method)
         return _jsonrpc_error(INTERNAL_ERROR, "Internal error", req_id=req_id)
-# A2A JSON-RPC endpoint

@@ -14,14 +14,14 @@ def client():
 
 @pytest.mark.asyncio
 async def test_agent_card_returns_json(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/json"
 
 
 @pytest.mark.asyncio
 async def test_agent_card_has_required_fields(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     card = resp.json()
 
     # Required A2A Agent Card fields
@@ -36,7 +36,7 @@ async def test_agent_card_has_required_fields(client):
 
 @pytest.mark.asyncio
 async def test_agent_card_has_skills(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     card = resp.json()
 
     skill_ids = {s["id"] for s in card["skills"]}
@@ -49,7 +49,7 @@ async def test_agent_card_has_skills(client):
 
 @pytest.mark.asyncio
 async def test_agent_card_has_auth_info(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     card = resp.json()
 
     assert "authentication" in card
@@ -58,5 +58,5 @@ async def test_agent_card_has_auth_info(client):
 
 @pytest.mark.asyncio
 async def test_agent_card_cors_header(client):
-    resp = await client.get("/.well-known/agent-card.json")
+    resp = await client.get("/.well-known/agent.json")
     assert resp.headers.get("access-control-allow-origin") == "*"
