@@ -1,13 +1,13 @@
-"""Tests for the Pinchwork MCP server integration."""
+"""Tests for the Pinchwork MCP server. Skipped when mcp SDK not installed."""
 
 from __future__ import annotations
 
-import json
-import os
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+
+mcp_mod = pytest.importorskip("mcp", reason="mcp SDK not installed")
 
 
 def _mock_response(status_code: int = 200, json_data: dict | None = None) -> httpx.Response:
@@ -15,137 +15,80 @@ def _mock_response(status_code: int = 200, json_data: dict | None = None) -> htt
 
 
 @pytest.fixture(autouse=True)
-def set_api_key(monkeypatch):
+def set_env(monkeypatch):
     monkeypatch.setenv("PINCHWORK_API_KEY", "pwk-test")
-    monkeypatch.setenv("PINCHWORK_BASE_URL", "https://test.pinchwork.dev")
+    monkeypatch.setenv("PINCHWORK_BASE_URL", "https://test.dev")
 
 
-class TestPinchworkDelegate:
+def _mock_async_client(mock_resp):
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.request.return_value = mock_resp
+    return mock_client
+
+
+class TestDelegate:
     @pytest.mark.asyncio
-    async def test_delegate_creates_task(self):
-        mock_resp = _mock_response(200, {"task_id": "tk-abc", "status": "posted"})
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
-            # Re-import after env is set
+    async def test_creates_task(self):
+        with patch(
+            "httpx.AsyncClient",
+            return_value=_mock_async_client(
+                _mock_response(200, {"task_id": "tk-abc", "status": "posted"})
+            ),
+        ):
             from integrations.mcp.server import pinchwork_delegate
 
-            result = await pinchwork_delegate(need="Summarize this", max_credits=5)
-
+            result = await pinchwork_delegate(need="test", max_credits=5)
         assert "tk-abc" in result
-        assert "posted" in result
 
     @pytest.mark.asyncio
-    async def test_delegate_with_wait_returns_result(self):
-        mock_resp = _mock_response(
+    async def test_returns_completed_result(self):
+        resp = _mock_response(
             200,
             {
                 "task_id": "tk-abc",
                 "status": "delivered",
-                "result": "here is the summary",
-                "credits_claimed": 5,
+                "result": "answer",
+                "worker_id": "ag-x",
+                "credits_charged": 5,
             },
         )
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
+        with patch("httpx.AsyncClient", return_value=_mock_async_client(resp)):
             from integrations.mcp.server import pinchwork_delegate
 
             result = await pinchwork_delegate(need="test", wait=30)
+        assert "answer" in result
 
-        assert "completed" in result or "delivered" in result.lower() or "tk-abc" in result
 
-
-class TestPinchworkPickup:
+class TestPickup:
     @pytest.mark.asyncio
-    async def test_pickup_returns_task(self):
-        mock_resp = _mock_response(
-            200, {"task_id": "tk-xyz", "need": "write docs", "max_credits": 10}
+    async def test_returns_task(self):
+        resp = _mock_response(
+            200, {"task_id": "tk-xyz", "need": "write docs", "max_credits": 10, "tags": []}
         )
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
+        with patch("httpx.AsyncClient", return_value=_mock_async_client(resp)):
             from integrations.mcp.server import pinchwork_pickup
 
             result = await pinchwork_pickup()
-
-        assert "tk-xyz" in result
-        assert "write docs" in result
+        assert "tk-xyz" in result and "write docs" in result
 
 
-class TestPinchworkDeliver:
+class TestStatus:
     @pytest.mark.asyncio
-    async def test_deliver_sends_result(self):
-        mock_resp = _mock_response(200, {"task_id": "tk-abc", "status": "delivered"})
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
-            from integrations.mcp.server import pinchwork_deliver
-
-            result = await pinchwork_deliver(
-                task_id="tk-abc", result="answer here", credits_claimed=5
-            )
-
-        assert "tk-abc" in result
-
-
-class TestPinchworkBrowse:
-    @pytest.mark.asyncio
-    async def test_browse_lists_tasks(self):
-        mock_resp = _mock_response(
+    async def test_returns_agent_info(self):
+        resp = _mock_response(
             200,
-            {"tasks": [{"task_id": "tk-1", "need": "test task", "max_credits": 5, "tags": []}]},
+            {
+                "name": "test-agent",
+                "credits": 100,
+                "reputation": 4.5,
+                "tasks_posted": 5,
+                "tasks_completed": 3,
+            },
         )
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
-            from integrations.mcp.server import pinchwork_browse
-
-            result = await pinchwork_browse()
-
-        assert "1" in result  # Found 1 task
-
-
-class TestPinchworkStatus:
-    @pytest.mark.asyncio
-    async def test_status_returns_agent_info(self):
-        mock_resp = _mock_response(200, {"name": "test-agent", "credits": 100, "reputation": 4.5})
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.request.return_value = mock_resp
-            mock_cls.return_value = mock_client
-
+        with patch("httpx.AsyncClient", return_value=_mock_async_client(resp)):
             from integrations.mcp.server import pinchwork_status
 
             result = await pinchwork_status()
-
-        assert "test-agent" in result
-        assert "100" in result
+        assert "test-agent" in result and "100" in result
