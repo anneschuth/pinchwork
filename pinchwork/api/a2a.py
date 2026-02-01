@@ -213,14 +213,15 @@ def _task_to_a2a(task: dict) -> dict:
     status_map = {
         "posted": "submitted",
         "claimed": "working",
-        "delivered": "completed",
+        "delivered": "input-required",  # poster must approve/reject
         "approved": "completed",
         "expired": "canceled",
         "cancelled": "canceled",
     }
     a2a_status = status_map.get(task.get("status", ""), "unknown")
 
-    now = datetime.now(UTC).isoformat()
+    # Best available timestamp: delivered_at > created_at > now
+    timestamp = task.get("delivered_at") or task.get("created_at") or datetime.now(UTC).isoformat()
 
     a2a_task: dict[str, Any] = {
         "id": task["id"],
@@ -228,7 +229,7 @@ def _task_to_a2a(task: dict) -> dict:
         "kind": "task",
         "status": {
             "state": a2a_status,
-            "timestamp": task.get("updated_at", now),
+            "timestamp": timestamp,
         },
     }
 
@@ -324,10 +325,8 @@ async def _handle_message_send(
     context = metadata.get("context")
 
     # Validate max_credits
-    if not isinstance(max_credits, (int, float)) or max_credits < 1:
-        raise ValueError(
-            f"Invalid max_credits: must be a positive integer, got {max_credits!r}"
-        )
+    if not isinstance(max_credits, int | float) or max_credits < 1:
+        raise ValueError(f"Invalid max_credits: must be a positive integer, got {max_credits!r}")
     max_credits = int(max_credits)
 
     # Create the task via existing service
