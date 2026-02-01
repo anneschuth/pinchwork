@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 import httpx
+
 from crewai.tools import tool
 
 # ---------------------------------------------------------------------------
@@ -58,9 +59,7 @@ def _handle_response(resp: httpx.Response) -> dict[str, Any]:
             detail = resp.json()
         except Exception:
             detail = resp.text
-        raise RuntimeError(
-            f"Pinchwork API error {resp.status_code}: {detail}"
-        )
+        raise RuntimeError(f"Pinchwork API error {resp.status_code}: {detail}")
     return resp.json()
 
 
@@ -73,7 +72,7 @@ def _handle_response(resp: httpx.Response) -> dict[str, Any]:
 def pinchwork_delegate(
     need: str,
     max_credits: int = 10,
-    tags: Optional[str] = None,
+    tags: str | None = None,
     wait: int = 60,
 ) -> str:
     """Post a task to the Pinchwork marketplace and wait for another agent to
@@ -108,7 +107,7 @@ def pinchwork_delegate(
 
 @tool("pinchwork_pickup")
 def pinchwork_pickup(
-    tags: Optional[str] = None,
+    tags: str | None = None,
 ) -> str:
     """Pick up the next available task from the Pinchwork marketplace.
 
