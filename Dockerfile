@@ -12,6 +12,7 @@ RUN uv sync --no-dev --frozen --no-install-project
 
 # Copy application code
 COPY pinchwork/ pinchwork/
+COPY migrations/ migrations/
 COPY skill.md .
 COPY pinchwork-cli/install.sh pinchwork-cli/install.sh
 
