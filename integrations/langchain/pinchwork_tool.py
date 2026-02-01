@@ -17,8 +17,8 @@ Example::
 
 from __future__ import annotations
 
+import asyncio
 import json
-import time
 from typing import Any
 
 import httpx
@@ -30,25 +30,39 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 DEFAULT_BASE_URL = "https://pinchwork.dev"
-DEFAULT_POLL_INTERVAL = 2.0  # seconds
-DEFAULT_POLL_TIMEOUT = 120.0  # seconds
+DEFAULT_WAIT_SECONDS = 60  # server-side long-poll
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Shared client helper
 # ---------------------------------------------------------------------------
 
 
-def _headers(api_key: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+class _PinchworkMixin:
+    """Shared API helpers — avoids repeating auth/base_url on every tool."""
 
+    api_key: str
+    base_url: str
 
-def _raise_for_status(resp: httpx.Response) -> None:
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Pinchwork API error {resp.status_code}: {resp.text}")
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def _handle(self, resp: httpx.Response) -> dict:
+        """Parse response, raise with useful detail on error."""
+        if resp.status_code == 204:
+            return {"status": "empty", "message": "No content available"}
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise RuntimeError(f"Pinchwork API {resp.status_code}: {detail}")
+        return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -62,46 +76,36 @@ class DelegateInput(BaseModel):
     need: str = Field(description="Plain-language description of the task.")
     max_credits: int = Field(
         default=10,
-        description="Maximum credits you are willing to pay for this task.",
+        description="Maximum credits to pay. Workers claim up to this amount.",
     )
     tags: list[str] = Field(
         default_factory=list,
-        description="Optional tags to help match the task to capable agents.",
+        description="Tags to help match the right specialist (e.g. ['python', 'code-review']).",
     )
-    wait: bool = Field(
-        default=False,
+    context: str = Field(
+        default="",
+        description="Optional extra context or data the worker might need.",
+    )
+    wait: int = Field(
+        default=0,
         description=(
-            "If True, poll until the task is completed and return the result. "
-            "If False, return immediately with the created task object."
+            "Seconds to wait for a result (server-side long-poll, max 120). "
+            "0 = fire-and-forget, returns immediately with task ID."
         ),
-    )
-    poll_interval: float = Field(
-        default=DEFAULT_POLL_INTERVAL,
-        description="Seconds between status polls when wait=True.",
-    )
-    poll_timeout: float = Field(
-        default=DEFAULT_POLL_TIMEOUT,
-        description="Maximum seconds to wait for a result when wait=True.",
     )
 
 
 class PickupInput(BaseModel):
-    """Input for PinchworkPickupTool."""
-
-    tags: list[str] = Field(
-        default_factory=list,
-        description="Optional tags to filter which tasks to pick up.",
-    )
+    """Input for PinchworkPickupTool — no params needed."""
 
 
 class DeliverInput(BaseModel):
     """Input for PinchworkDeliverTool."""
 
-    task_id: str = Field(description="The ID of the task to deliver a result for.")
-    result: str = Field(description="The result / deliverable for the task.")
+    task_id: str = Field(description="The task ID to deliver results for.")
+    result: str = Field(description="The completed work / deliverable.")
     credits_claimed: int = Field(
-        default=1,
-        description="Number of credits to claim for this delivery.",
+        description="Credits to claim. Must be ≤ the task's max_credits.",
     )
 
 
@@ -110,8 +114,9 @@ class BrowseInput(BaseModel):
 
     tags: list[str] = Field(
         default_factory=list,
-        description="Optional tags to filter the available tasks.",
+        description="Filter by tags. Empty = show all.",
     )
+    limit: int = Field(default=10, description="Max tasks to return.")
 
 
 # ---------------------------------------------------------------------------
@@ -119,14 +124,20 @@ class BrowseInput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class PinchworkDelegateTool(BaseTool):
-    """Post a task to the Pinchwork marketplace and optionally wait for a result."""
+class PinchworkDelegateTool(_PinchworkMixin, BaseTool):
+    """Post a task to the Pinchwork marketplace.
+
+    Uses server-side long-polling (``wait`` param) instead of client-side
+    polling loops, so the connection stays open until a worker delivers or
+    the timeout expires.
+    """
 
     name: str = "pinchwork_delegate"
     description: str = (
         "Delegate a task to the Pinchwork agent marketplace. "
-        "Describe what you need in plain language, set a credit budget, "
-        "and optionally wait for another agent to complete it."
+        "Another AI agent will pick it up, do the work, and return the result. "
+        "Set wait > 0 to block until done (recommended: 60). "
+        "Costs credits from your balance."
     )
     args_schema: type[BaseModel] = DelegateInput
 
@@ -138,83 +149,84 @@ class PinchworkDelegateTool(BaseTool):
         need: str,
         max_credits: int = 10,
         tags: list[str] | None = None,
-        wait: bool = False,
-        poll_interval: float = DEFAULT_POLL_INTERVAL,
-        poll_timeout: float = DEFAULT_POLL_TIMEOUT,
+        context: str = "",
+        wait: int = 0,
         **_kwargs: Any,
     ) -> str:
-        with httpx.Client(base_url=self.base_url, timeout=30) as client:
-            # Create the task
-            resp = client.post(
-                "/v1/tasks",
-                headers=_headers(self.api_key),
-                json={
-                    "need": need,
-                    "max_credits": max_credits,
-                    "tags": tags or [],
-                },
-            )
-            _raise_for_status(resp)
-            task = resp.json()
+        body: dict[str, Any] = {
+            "need": need,
+            "max_credits": max_credits,
+        }
+        if tags:
+            body["tags"] = tags
+        if context:
+            body["context"] = context
+        if wait > 0:
+            body["wait"] = min(wait, 120)
 
-            if not wait:
-                return json.dumps(task, indent=2)
+        timeout = max(30, wait + 10)  # client timeout > server wait
+        with httpx.Client(base_url=self.base_url, timeout=timeout) as client:
+            resp = client.post("/v1/tasks", headers=self._headers, json=body)
+            task = self._handle(resp)
 
-            # Poll until completed or timeout
-            task_id = task.get("id") or task.get("task_id")
-            deadline = time.monotonic() + poll_timeout
-            while time.monotonic() < deadline:
-                time.sleep(poll_interval)
-                poll_resp = client.get(
-                    f"/v1/tasks/{task_id}",
-                    headers=_headers(self.api_key),
-                )
-                _raise_for_status(poll_resp)
-                task = poll_resp.json()
-                status = task.get("status", "")
-                if status in ("delivered", "approved", "completed"):
-                    return json.dumps(task, indent=2)
-
-            return json.dumps(
-                {"error": "timeout", "task": task},
-                indent=2,
+        # If we got a result back (server returned completed task), surface it
+        if task.get("result"):
+            return (
+                f"✅ Task completed by {task.get('worker_id', 'unknown')}.\n"
+                f"Result: {task['result']}\n"
+                f"Credits charged: {task.get('credits_charged', '?')}"
             )
 
+        return json.dumps(task, indent=2)
 
-class PinchworkPickupTool(BaseTool):
+    async def _arun(self, **kwargs: Any) -> str:
+        """Async version — runs sync in executor to avoid blocking event loop."""
+        return await asyncio.get_event_loop().run_in_executor(None, lambda: self._run(**kwargs))
+
+
+class PinchworkPickupTool(_PinchworkMixin, BaseTool):
     """Pick up the next available task from the Pinchwork marketplace."""
 
     name: str = "pinchwork_pickup"
     description: str = (
         "Pick up an available task from the Pinchwork marketplace. "
-        "Returns the task details so you can work on it."
+        "Returns task details (ID, need, max_credits) so you can work on it. "
+        "After completing the work, use pinchwork_deliver to submit your result."
     )
     args_schema: type[BaseModel] = PickupInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
 
-    def _run(self, tags: list[str] | None = None, **_kwargs: Any) -> str:
+    def _run(self, **_kwargs: Any) -> str:
         with httpx.Client(base_url=self.base_url, timeout=30) as client:
-            body: dict[str, Any] = {}
-            if tags:
-                body["tags"] = tags
-            resp = client.post(
-                "/v1/tasks/pickup",
-                headers=_headers(self.api_key),
-                json=body,
-            )
-            _raise_for_status(resp)
-            return json.dumps(resp.json(), indent=2)
+            resp = client.post("/v1/tasks/pickup", headers=self._headers)
+            task = self._handle(resp)
+
+        if task.get("status") == "empty":
+            return "No tasks available right now. Try again later."
+
+        return (
+            f"📋 Picked up task {task.get('task_id', '?')}\n"
+            f"Need: {task.get('need', 'N/A')}\n"
+            f"Max credits: {task.get('max_credits', '?')}\n"
+            f"Tags: {', '.join(task.get('tags') or []) or 'none'}\n"
+            f"Context: {task.get('context', 'none')}\n\n"
+            f"Deliver your result with pinchwork_deliver using task_id={task.get('task_id')}"
+        )
+
+    async def _arun(self, **kwargs: Any) -> str:
+        return await asyncio.get_event_loop().run_in_executor(None, lambda: self._run(**kwargs))
 
 
-class PinchworkDeliverTool(BaseTool):
+class PinchworkDeliverTool(_PinchworkMixin, BaseTool):
     """Deliver a result for a previously picked-up task."""
 
     name: str = "pinchwork_deliver"
     description: str = (
-        "Deliver a result for a task you picked up from Pinchwork. "
-        "Provide the task ID, the result text, and credits to claim."
+        "Submit your completed work for a Pinchwork task. "
+        "You must provide the task_id, your result, and how many credits to claim. "
+        "The poster will review and approve/reject your delivery."
     )
     args_schema: type[BaseModel] = DeliverInput
 
@@ -231,38 +243,57 @@ class PinchworkDeliverTool(BaseTool):
         with httpx.Client(base_url=self.base_url, timeout=30) as client:
             resp = client.post(
                 f"/v1/tasks/{task_id}/deliver",
-                headers=_headers(self.api_key),
-                json={
-                    "result": result,
-                    "credits_claimed": credits_claimed,
-                },
+                headers=self._headers,
+                json={"result": result, "credits_claimed": credits_claimed},
             )
-            _raise_for_status(resp)
-            return json.dumps(resp.json(), indent=2)
+            data = self._handle(resp)
+
+        return f"✅ Delivered result for {task_id}. Status: {data.get('status', '?')}"
+
+    async def _arun(self, **kwargs: Any) -> str:
+        return await asyncio.get_event_loop().run_in_executor(None, lambda: self._run(**kwargs))
 
 
-class PinchworkBrowseTool(BaseTool):
+class PinchworkBrowseTool(_PinchworkMixin, BaseTool):
     """List available tasks on the Pinchwork marketplace."""
 
     name: str = "pinchwork_browse"
     description: str = (
-        "Browse available tasks on the Pinchwork marketplace. "
-        "Returns a list of tasks that are waiting to be picked up."
+        "Browse open tasks on Pinchwork that are waiting for a worker. "
+        "Use this to find tasks you can pick up and earn credits."
     )
     args_schema: type[BaseModel] = BrowseInput
 
     api_key: str = Field(description="Pinchwork API key (Bearer token).")
     base_url: str = Field(default=DEFAULT_BASE_URL)
 
-    def _run(self, tags: list[str] | None = None, **_kwargs: Any) -> str:
+    def _run(
+        self,
+        tags: list[str] | None = None,
+        limit: int = 10,
+        **_kwargs: Any,
+    ) -> str:
+        params: dict[str, Any] = {"limit": limit}
+        if tags:
+            params["tags"] = ",".join(tags)
+
         with httpx.Client(base_url=self.base_url, timeout=30) as client:
-            params: dict[str, Any] = {}
-            if tags:
-                params["tags"] = ",".join(tags)
-            resp = client.get(
-                "/v1/tasks/available",
-                headers=_headers(self.api_key),
-                params=params,
+            resp = client.get("/v1/tasks/available", headers=self._headers, params=params)
+            data = self._handle(resp)
+
+        tasks = data.get("tasks", []) if isinstance(data, dict) else data
+        if not tasks:
+            return "No tasks available right now."
+
+        lines = [f"Found {len(tasks)} task(s):\n"]
+        for t in tasks:
+            tid = t.get("task_id", t.get("id", "?"))
+            lines.append(
+                f"  • [{tid}] {t.get('need', 'N/A')[:80]} "
+                f"(max {t.get('max_credits', '?')} credits, "
+                f"tags: {', '.join(t.get('tags') or []) or 'none'})"
             )
-            _raise_for_status(resp)
-            return json.dumps(resp.json(), indent=2)
+        return "\n".join(lines)
+
+    async def _arun(self, **kwargs: Any) -> str:
+        return await asyncio.get_event_loop().run_in_executor(None, lambda: self._run(**kwargs))
