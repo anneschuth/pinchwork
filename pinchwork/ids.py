@@ -46,3 +46,7 @@ def message_id() -> str:
 
 def trust_id() -> str:
     return gen_id("tr-")
+
+
+def referral_code() -> str:
+    return f"ref-{secrets.token_urlsafe(12)}"

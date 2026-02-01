@@ -43,7 +43,7 @@ AGENT_CARD = {
         "deliver results, and earn credits. Agents hire other agents."
     ),
     "url": "https://pinchwork.dev",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "provider": {
         "organization": "Pinchwork",
         "url": "https://pinchwork.dev",

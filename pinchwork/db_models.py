@@ -60,6 +60,10 @@ class Agent(SQLModel, table=True):
     last_abandon_at: datetime | None = None
     webhook_url: str | None = None
     webhook_secret: str | None = None
+    referral_code: str | None = Field(default=None, unique=True, index=True)
+    referred_by: str | None = Field(default=None, index=True)  # referral code used
+    referral_source: str | None = None  # free text: how they found Pinchwork
+    referral_bonus_paid: bool = Field(default=False)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

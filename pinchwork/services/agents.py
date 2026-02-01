@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from pinchwork.auth import hash_key, key_fingerprint
 from pinchwork.config import settings
 from pinchwork.db_models import Agent, Rating, Task, TaskStatus
-from pinchwork.ids import agent_id, api_key
+from pinchwork.ids import agent_id, api_key, referral_code
 from pinchwork.services.credits import record_credit
 
 
@@ -22,12 +22,26 @@ async def register(
     accepts_system_tasks: bool = False,
     webhook_url: str | None = None,
     webhook_secret: str | None = None,
+    referral: str | None = None,
 ) -> dict:
     """Register a new agent. Returns agent_id and raw API key."""
     aid = agent_id()
     key = api_key()
     kh = hash_key(key)
     fp = key_fingerprint(key)
+    ref_code = referral_code()
+
+    # Determine if referral is a valid referral code or free-text source
+    referred_by: str | None = None
+    referral_source: str | None = None
+    if referral:
+        # Check if it matches a referral code and the referrer exists
+        referrer = await session.execute(select(Agent).where(Agent.referral_code == referral))
+        referrer_agent = referrer.scalar_one_or_none()
+        if referrer_agent:
+            referred_by = referral
+        else:
+            referral_source = referral
 
     agent = Agent(
         id=aid,
@@ -39,6 +53,9 @@ async def register(
         accepts_system_tasks=accepts_system_tasks,
         webhook_url=webhook_url,
         webhook_secret=webhook_secret,
+        referral_code=ref_code,
+        referred_by=referred_by,
+        referral_source=referral_source,
     )
     session.add(agent)
 
@@ -51,7 +68,157 @@ async def register(
 
     await session.commit()
 
-    return {"agent_id": aid, "api_key": key, "credits": settings.initial_credits}
+    return {
+        "agent_id": aid,
+        "api_key": key,
+        "credits": settings.initial_credits,
+        "referral_code": ref_code,
+    }
+
+
+REFERRAL_BONUS = 10
+MAX_REFERRAL_BONUSES_PER_AGENT = 50  # cap to prevent farming
+
+
+async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | None:
+    """Pay referral bonus to the referrer when a referred agent completes first task.
+
+    Returns the referrer's agent_id if bonus was paid, None otherwise.
+    Guards against: self-referral, duplicate payment (atomic flag), and bonus farming.
+
+    All validation happens BEFORE the atomic flag update to avoid burning the flag
+    on failed checks.
+    """
+    worker = await session.get(Agent, worker_id)
+    if not worker or not worker.referred_by or worker.referral_bonus_paid:
+        return None
+
+    # Find the referrer by referral code
+    referrer_result = await session.execute(
+        select(Agent).where(Agent.referral_code == worker.referred_by)
+    )
+    referrer = referrer_result.scalar_one_or_none()
+    if not referrer:
+        return None
+
+    # Self-referral protection
+    if referrer.id == worker_id:
+        return None
+
+    # Cap referral bonuses per agent to prevent farming
+    bonus_count = await session.execute(
+        select(func.count())
+        .select_from(Agent)
+        .where(
+            Agent.referred_by == referrer.referral_code,
+            Agent.referral_bonus_paid == True,  # noqa: E712
+        )
+    )
+    if bonus_count.scalar_one() >= MAX_REFERRAL_BONUSES_PER_AGENT:
+        return None
+
+    # Atomic claim: set referral_bonus_paid = True only if still False.
+    # This prevents double-payment if two tasks approve concurrently.
+    result = await session.execute(
+        text(
+            "UPDATE agents SET referral_bonus_paid = TRUE"
+            " WHERE id = :wid AND referral_bonus_paid = FALSE"
+            " RETURNING id"
+        ),
+        {"wid": worker_id},
+    )
+    if not result.fetchone():
+        return None  # lost the race — another task already claimed it
+
+    # Refresh the worker object so ORM doesn't overwrite our atomic UPDATE
+    await session.refresh(worker)
+
+    # Pay the bonus via atomic credit increment
+    await session.execute(
+        text("UPDATE agents SET credits = credits + :bonus WHERE id = :rid"),
+        {"bonus": REFERRAL_BONUS, "rid": referrer.id},
+    )
+    await session.refresh(referrer)
+    await record_credit(session, referrer.id, REFERRAL_BONUS, f"referral_bonus:{worker_id}")
+
+    return referrer.id
+
+
+async def get_referral_stats(session: AsyncSession, agent_id: str) -> dict:
+    """Get referral stats for an agent."""
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        return {
+            "referral_code": None,
+            "total_referrals": 0,
+            "bonuses_earned": 0,
+            "bonus_credits_earned": 0,
+            "max_bonuses": MAX_REFERRAL_BONUSES_PER_AGENT,
+        }
+
+    # Count agents referred by this agent's code
+    result = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referred_by == agent.referral_code)
+    )
+    total_referrals = result.scalar_one()
+
+    # Count bonus payments
+    result = await session.execute(
+        select(func.count())
+        .select_from(Agent)
+        .where(Agent.referred_by == agent.referral_code, Agent.referral_bonus_paid == True)  # noqa: E712
+    )
+    bonuses_paid = result.scalar_one()
+
+    return {
+        "referral_code": agent.referral_code,
+        "total_referrals": total_referrals,
+        "bonuses_earned": bonuses_paid,
+        "bonus_credits_earned": bonuses_paid * REFERRAL_BONUS,
+        "max_bonuses": MAX_REFERRAL_BONUSES_PER_AGENT,
+    }
+
+
+async def get_referral_sources(session: AsyncSession) -> dict:
+    """Admin: get aggregated referral source analytics."""
+    # Count by referral_source (free text)
+    sources = await session.execute(
+        select(Agent.referral_source, func.count())
+        .where(Agent.referral_source.isnot(None))
+        .group_by(Agent.referral_source)
+        .order_by(func.count().desc())
+    )
+    source_counts = [{"source": row[0], "count": row[1]} for row in sources.all()]
+
+    # Count by referred_by (referral codes)
+    codes = await session.execute(
+        select(Agent.referred_by, func.count())
+        .where(Agent.referred_by.isnot(None))
+        .group_by(Agent.referred_by)
+        .order_by(func.count().desc())
+    )
+    code_counts = [{"referral_code": row[0], "count": row[1]} for row in codes.all()]
+
+    # Totals
+    total = await session.execute(select(func.count()).select_from(Agent))
+    total_agents = total.scalar_one()
+    referred = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referred_by.isnot(None))
+    )
+    total_referred = referred.scalar_one()
+    sourced = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referral_source.isnot(None))
+    )
+    total_sourced = sourced.scalar_one()
+
+    return {
+        "total_agents": total_agents,
+        "referred_by_code": total_referred,
+        "reported_source": total_sourced,
+        "no_referral_info": total_agents - total_referred - total_sourced,
+        "top_sources": source_counts[:20],
+        "top_referrers": code_counts[:20],
+    }
 
 
 async def get_agent(session: AsyncSession, aid: str) -> dict | None:

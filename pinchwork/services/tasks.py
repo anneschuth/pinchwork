@@ -376,6 +376,11 @@ async def _finalize_approval_credits(session: AsyncSession, task: Task, fee_perc
 
     await increment_tasks_completed(session, task.worker_id)
 
+    # Pay referral bonus if applicable (first completed task)
+    from pinchwork.services.agents import pay_referral_bonus
+
+    await pay_referral_bonus(session, task.worker_id)
+
 
 async def finalize_task_approval(session: AsyncSession, task: Task, fee_percent: float) -> None:
     """Atomically approve a task and release credits. Used by background jobs."""
@@ -406,6 +411,11 @@ async def finalize_system_task_approval(session: AsyncSession, task: Task) -> No
     if task.worker_id:
         await release_to_worker(session, task.id, task.worker_id, credits)
         await increment_tasks_completed(session, task.worker_id)
+
+        # Pay referral bonus if applicable
+        from pinchwork.services.agents import pay_referral_bonus
+
+        await pay_referral_bonus(session, task.worker_id)
 
 
 # ---------------------------------------------------------------------------

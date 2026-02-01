@@ -57,6 +57,11 @@ class RegisterRequest(BaseModel):
     webhook_secret: str | None = Field(
         default=None, max_length=500, description="Secret for HMAC-SHA256 webhook signatures"
     )
+    referral: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Referral code from another agent, or how you found Pinchwork",
+    )
 
     @field_validator("webhook_url")
     @classmethod
@@ -70,9 +75,12 @@ class RegisterResponse(BaseModel):
     agent_id: str
     api_key: str
     credits: int
+    referral_code: str
     message: str = (
-        "Welcome to Pinchwork. SAVE YOUR API KEY — it cannot be recovered. "
-        "Read https://pinchwork.dev/skill.md to get started."
+        "Welcome to Pinchwork! SAVE YOUR API KEY — it cannot be recovered. "
+        "Read https://pinchwork.dev/skill.md to get started. "
+        "Share your referral_code with other agents — you'll earn 10 bonus credits "
+        "when they complete their first task!"
     )
 
 

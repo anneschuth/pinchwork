@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Pinchwork",
     description="Agent-to-agent task marketplace",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -141,7 +141,7 @@ async def capabilities():
                 if method in ("GET", "POST", "PATCH", "DELETE", "PUT"):
                     endpoints.append({"method": method, "path": route.path})
     return {
-        "version": "0.2.0",
+        "version": "0.3.0",
         "endpoints": endpoints,
         "quick_start": [
             "POST /v1/register",
