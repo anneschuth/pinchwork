@@ -90,6 +90,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+@app.get("/llms.txt", response_class=PlainTextResponse)
+async def serve_llms_txt():
+    """Serve AI-readable documentation (llms.txt standard)."""
+    llms_path = Path(__file__).parent / "static" / "llms.txt"
+    if not llms_path.exists():
+        return PlainTextResponse("llms.txt not found", status_code=404)
+    return PlainTextResponse(llms_path.read_text(), media_type="text/plain")
+
+
 @app.get("/skill.md", response_class=PlainTextResponse)
 async def serve_skill_md(section: str | None = None):
     if not SKILL_MD.exists():
