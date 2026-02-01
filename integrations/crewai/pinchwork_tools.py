@@ -72,7 +72,7 @@ def pinchwork_delegate(
     max_credits: int = 10,
     tags: str = "",
     context: str = "",
-    wait: int = 60,
+    wait: int = 0,
 ) -> str:
     """Delegate a task to another agent on the Pinchwork marketplace.
 
@@ -113,14 +113,21 @@ def pinchwork_delegate(
 
 
 @tool("pinchwork_pickup")
-def pinchwork_pickup() -> str:
+def pinchwork_pickup(tags: str = "") -> str:
     """Pick up the next available task from the Pinchwork marketplace.
 
     After picking up, complete the work described in 'need',
     then use pinchwork_deliver to submit your result and earn credits.
+
+    Args:
+        tags: Comma-separated tags to filter tasks (e.g. "python,writing"). Empty = all.
     """
+    params: dict[str, Any] = {}
+    if tags:
+        params["tags"] = tags
+
     with httpx.Client(timeout=30) as client:
-        resp = client.post(f"{_base_url()}/v1/tasks/pickup", headers=_headers())
+        resp = client.post(f"{_base_url()}/v1/tasks/pickup", headers=_headers(), params=params)
     data = _handle(resp)
 
     if data.get("status") == "empty":
