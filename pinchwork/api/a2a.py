@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from pinchwork.auth import get_current_agent
@@ -212,10 +213,15 @@ def _task_to_a2a(task: dict) -> dict:
     }
     a2a_status = status_map.get(task.get("status", ""), "unknown")
 
+    now = datetime.now(timezone.utc).isoformat()
+
     a2a_task: dict[str, Any] = {
         "id": task["id"],
+        "contextId": task["id"],  # use task ID as context for multi-turn
+        "kind": "task",
         "status": {
             "state": a2a_status,
+            "timestamp": task.get("updated_at", now),
         },
     }
 
@@ -258,7 +264,7 @@ def _extract_text_from_parts(parts: list[dict]) -> str:
     texts = []
     for part in parts:
         kind = part.get("kind", part.get("type", ""))
-        if kind == "text" or "text" in part:
+        if kind == "text":
             texts.append(part.get("text", ""))
     return "\n".join(texts).strip()
 
@@ -311,8 +317,10 @@ async def _handle_message_send(
     context = metadata.get("context")
 
     # Validate max_credits
-    if not isinstance(max_credits, int) or max_credits < 1:
-        max_credits = 50
+    if not isinstance(max_credits, (int, float)) or max_credits < 1:
+        raise ValueError(
+            f"Invalid max_credits: must be a positive integer, got {max_credits!r}"
+        )
 
     # Create the task via existing service
     task = await create_task(
@@ -447,18 +455,16 @@ async def a2a_jsonrpc(
         return _jsonrpc_error(INVALID_PARAMS, str(e), req_id=req_id)
     except LookupError as e:
         return _jsonrpc_error(TASK_NOT_FOUND, str(e), req_id=req_id)
+    except HTTPException as e:
+        # Map HTTPException to appropriate JSON-RPC errors
+        if e.status_code == 404:
+            return _jsonrpc_error(TASK_NOT_FOUND, e.detail, req_id=req_id)
+        if e.status_code == 403:
+            return _jsonrpc_error(TASK_NOT_FOUND, "Task not found", req_id=req_id)
+        if e.status_code == 409:
+            return _jsonrpc_error(UNSUPPORTED_OPERATION, e.detail, req_id=req_id)
+        return _jsonrpc_error(INTERNAL_ERROR, e.detail, req_id=req_id)
     except Exception as e:
         logger.exception("A2A handler error for method %s", method)
-        # Map HTTPException to appropriate JSON-RPC errors
-        from fastapi import HTTPException
-
-        if isinstance(e, HTTPException):
-            if e.status_code == 404:
-                return _jsonrpc_error(TASK_NOT_FOUND, e.detail, req_id=req_id)
-            if e.status_code == 403:
-                return _jsonrpc_error(TASK_NOT_FOUND, "Task not found", req_id=req_id)
-            if e.status_code == 409:
-                return _jsonrpc_error(UNSUPPORTED_OPERATION, e.detail, req_id=req_id)
-            return _jsonrpc_error(INTERNAL_ERROR, e.detail, req_id=req_id)
         return _jsonrpc_error(INTERNAL_ERROR, "Internal error", req_id=req_id)
 # A2A JSON-RPC endpoint

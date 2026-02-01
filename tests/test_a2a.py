@@ -123,8 +123,35 @@ async def test_message_send(registered_agent):
 
     task = data["result"]
     assert "id" in task
+    assert task["kind"] == "task"
+    assert "contextId" in task
     assert task["status"]["state"] == "submitted"
+    assert "timestamp" in task["status"]
     assert task["metadata"]["poster_id"] == agent_id
+
+
+@pytest.mark.asyncio
+async def test_message_send_invalid_max_credits(registered_agent):
+    """message/send rejects invalid max_credits with -32602."""
+    client, _, api_key = registered_agent
+    resp = await client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "bad-credits",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "Test task"}],
+                },
+                "metadata": {"max_credits": -5},
+            },
+        },
+        headers=auth_header(api_key),
+    )
+    data = resp.json()
+    assert data["error"]["code"] == -32602  # Invalid params
 
 
 @pytest.mark.asyncio
