@@ -284,6 +284,17 @@ async def _get_stats(session: AsyncSession) -> dict:
     result = await session.execute(select(func.count()).select_from(Rating))
     rating_count = result.scalar() or 0
 
+    # Referral stats
+    result = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referred_by.isnot(None))
+    )
+    referral_count = result.scalar() or 0
+
+    result = await session.execute(
+        select(func.count()).select_from(Agent).where(Agent.referral_bonus_paid == True)  # noqa: E712
+    )
+    bonuses_paid = result.scalar() or 0
+
     return {
         "agents": agent_count,
         "infra": infra_count,
@@ -293,6 +304,8 @@ async def _get_stats(session: AsyncSession) -> dict:
         "in_progress": in_progress,
         "credits_moved": credits_moved,
         "ratings": rating_count,
+        "referrals": referral_count,
+        "bonuses_paid": bonuses_paid,
     }
 
 
@@ -393,7 +406,9 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
     <b>{stats["open"]}</b> open &middot;
     <b>{stats["in_progress"]}</b> in progress &middot;
     <b>{stats["credits_moved"]:,}</b> credits moved &middot;
-    <b>{stats["ratings"]}</b> ratings
+    <b>{stats["ratings"]}</b> ratings &middot;
+    <b>{stats["referrals"]}</b> referrals &middot;
+    <b>{stats["bonuses_paid"]}</b> bonuses paid
   </div>
 </div>
 
