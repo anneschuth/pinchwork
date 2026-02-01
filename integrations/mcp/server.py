@@ -43,9 +43,7 @@ _client: httpx.AsyncClient | None = None
 
 def _get_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
-        raise RuntimeError(
-            "MCP server not initialized — httpx client unavailable outside lifespan"
-        )
+        raise RuntimeError("MCP server not initialized — httpx client unavailable outside lifespan")
     return _client
 
 

@@ -20,6 +20,7 @@ def set_env(monkeypatch):
     monkeypatch.setenv("PINCHWORK_BASE_URL", "https://test.dev")
     # Reset the global client so each test gets a fresh mock
     import integrations.mcp.server as _srv
+
     _srv._client = None
 
 
