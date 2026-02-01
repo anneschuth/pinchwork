@@ -57,7 +57,10 @@ async def _request(method: str, path: str, **kwargs) -> dict:
         "Accept": "application/json",
     }
     client = await _get_client()
-    resp = await client.request(method, f"{_base_url()}{path}", headers=headers, **kwargs)
+    try:
+        resp = await client.request(method, f"{_base_url()}{path}", headers=headers, **kwargs)
+    except httpx.HTTPError as e:
+        return {"error": "Network error", "detail": str(e)}
 
     if resp.status_code == 204:
         return {"status": "empty", "message": "No content"}

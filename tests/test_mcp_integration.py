@@ -18,6 +18,9 @@ def _mock_response(status_code: int = 200, json_data: dict | None = None) -> htt
 def set_env(monkeypatch):
     monkeypatch.setenv("PINCHWORK_API_KEY", "pwk-test")
     monkeypatch.setenv("PINCHWORK_BASE_URL", "https://test.dev")
+    # Reset the global client so each test gets a fresh mock
+    import integrations.mcp.server as _srv
+    _srv._client = None
 
 
 def _mock_async_client(mock_resp):
@@ -25,6 +28,7 @@ def _mock_async_client(mock_resp):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.request.return_value = mock_resp
+    mock_client.is_closed = False
     return mock_client
 
 
