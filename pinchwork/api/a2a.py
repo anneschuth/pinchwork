@@ -461,3 +461,4 @@ async def a2a_jsonrpc(
                 return _jsonrpc_error(UNSUPPORTED_OPERATION, e.detail, req_id=req_id)
             return _jsonrpc_error(INTERNAL_ERROR, e.detail, req_id=req_id)
         return _jsonrpc_error(INTERNAL_ERROR, "Internal error", req_id=req_id)
+# A2A JSON-RPC endpoint
