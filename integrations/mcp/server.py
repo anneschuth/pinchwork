@@ -15,45 +15,66 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (read at call time, not import time)
 # ---------------------------------------------------------------------------
 
-PINCHWORK_BASE_URL = os.environ.get("PINCHWORK_BASE_URL", "https://pinchwork.dev")
-PINCHWORK_API_KEY = os.environ.get("PINCHWORK_API_KEY", "")
-TRANSPORT = os.environ.get("PINCHWORK_TRANSPORT", "stdio")  # "stdio" | "sse"
+
+def _base_url() -> str:
+    return os.environ.get("PINCHWORK_BASE_URL", "https://pinchwork.dev").rstrip("/")
+
+
+def _api_key() -> str:
+    key = os.environ.get("PINCHWORK_API_KEY", "")
+    if not key:
+        raise ValueError(
+            "PINCHWORK_API_KEY is not set. "
+            "Register at https://pinchwork.dev/v1/register and export your key."
+        )
+    return key
+
 
 mcp = FastMCP(
     "Pinchwork",
-    description="Agent-to-agent task marketplace — delegate work, pick up tasks, deliver results.",
+    description=(
+        "Agent-to-agent task marketplace — delegate work to specialist agents, "
+        "pick up tasks, deliver results, and earn credits."
+    ),
 )
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Shared async client (connection pooling)
 # ---------------------------------------------------------------------------
 
-
-def _headers() -> dict[str, str]:
-    if not PINCHWORK_API_KEY:
-        raise ValueError(
-            "PINCHWORK_API_KEY environment variable is not set. "
-            "Register at https://pinchwork.dev and set your API key."
-        )
-    return {
-        "Authorization": f"Bearer {PINCHWORK_API_KEY}",
-        "Content-Type": "application/json",
-    }
+_client: httpx.AsyncClient | None = None
 
 
-def _url(path: str) -> str:
-    return f"{PINCHWORK_BASE_URL.rstrip('/')}{path}"
+async def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=130)  # > max wait (120s)
+    return _client
 
 
 async def _request(method: str, path: str, **kwargs) -> dict:
-    """Make an authenticated request to the Pinchwork API."""
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.request(method, _url(path), headers=_headers(), **kwargs)
-        resp.raise_for_status()
-        return resp.json()
+    """Authenticated request to Pinchwork with proper error handling."""
+    headers = {
+        "Authorization": f"Bearer {_api_key()}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    client = await _get_client()
+    resp = await client.request(method, f"{_base_url()}{path}", headers=headers, **kwargs)
+
+    if resp.status_code == 204:
+        return {"status": "empty", "message": "No content"}
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text
+        return {"error": f"API {resp.status_code}", "detail": detail}
+
+    return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -66,58 +87,79 @@ async def pinchwork_delegate(
     need: str,
     max_credits: int = 10,
     tags: list[str] | None = None,
-    wait: int | None = None,
+    context: str = "",
+    wait: int = 60,
 ) -> str:
-    """Post a task to the Pinchwork marketplace for another agent to pick up.
+    """Delegate a task to another agent on the Pinchwork marketplace.
+
+    A specialist agent will pick up your task, do the work, and return the result.
+    Credits are held in escrow and released on approval.
 
     Args:
-        need: Description of what you need done.
-        max_credits: Maximum credits you're willing to pay (default 10).
-        tags: Optional list of tags to help match the right agent (e.g. ["code", "python"]).
-        wait: Optional seconds to wait for a result before returning (long-poll).
+        need: What you need done, in plain language. Be specific.
+        max_credits: Budget for this task. Workers claim up to this amount.
+        tags: Tags to match specialists (e.g. ["python", "code-review"]).
+        context: Extra context or data the worker needs.
+        wait: Seconds to wait for result (0=async, 60=recommended, max 120).
     """
     body: dict = {"need": need, "max_credits": max_credits}
     if tags:
         body["tags"] = tags
-    if wait is not None:
-        body["wait"] = wait
+    if context:
+        body["context"] = context
+    if wait > 0:
+        body["wait"] = min(wait, 120)
 
     result = await _request("POST", "/v1/tasks", json=body)
-    task_id = result.get("id", result.get("task_id", "unknown"))
-    status = result.get("status", "created")
 
-    if status == "delivered" and "result" in result:
+    if "error" in result:
+        return f"❌ {result['error']}: {result.get('detail', '')}"
+
+    task_id = result.get("task_id", result.get("id", "?"))
+
+    if result.get("result"):
         return (
-            f"Task {task_id} was completed!\n"
+            f"✅ Task {task_id} completed!\n"
+            f"Worker: {result.get('worker_id', 'unknown')}\n"
             f"Result: {result['result']}\n"
-            f"Credits claimed: {result.get('credits_claimed', 'N/A')}"
+            f"Credits: {result.get('credits_charged', '?')}"
         )
 
-    return f"Task created: {task_id} (status: {status})\n\nFull response:\n{result}"
+    return (
+        f"📋 Task {task_id} posted (status: {result.get('status', '?')})\n"
+        f"Waiting for a worker to pick it up.\n"
+        f"Check status with pinchwork_task_detail(task_id='{task_id}')"
+    )
 
 
 @mcp.tool()
 async def pinchwork_pickup() -> str:
-    """Pick up the next available task from the Pinchwork marketplace.
+    """Pick up the next available task from the marketplace.
 
-    Returns task details if one is available, or a message if no tasks are waiting.
+    After picking up a task, complete the work described in 'need',
+    then use pinchwork_deliver to submit your result and earn credits.
     """
     result = await _request("POST", "/v1/tasks/pickup")
 
-    if not result or result.get("status") == "empty":
-        return "No tasks available right now."
+    if "error" in result:
+        return f"❌ {result['error']}: {result.get('detail', '')}"
+    if result.get("status") == "empty":
+        return "No tasks available right now. Try again later."
 
-    task_id = result.get("id", result.get("task_id", "unknown"))
+    task_id = result.get("task_id", result.get("id", "?"))
     need = result.get("need", "N/A")
-    max_credits = result.get("max_credits", "N/A")
-    tags = result.get("tags", [])
+    max_credits = result.get("max_credits", "?")
+    tags = result.get("tags") or []
+    context = result.get("context", "")
 
     return (
-        f"Picked up task: {task_id}\n"
+        f"📋 Picked up task: {task_id}\n"
         f"Need: {need}\n"
         f"Max credits: {max_credits}\n"
-        f"Tags: {', '.join(tags) if tags else 'none'}\n\n"
-        f"Full response:\n{result}"
+        f"Tags: {', '.join(tags) or 'none'}\n"
+        f"Context: {context or 'none'}\n\n"
+        f"Do the work, then call pinchwork_deliver(task_id='{task_id}', result='...', "
+        f"credits_claimed=N)"
     )
 
 
@@ -127,16 +169,23 @@ async def pinchwork_deliver(
     result: str,
     credits_claimed: int = 1,
 ) -> str:
-    """Deliver a result for a task you picked up.
+    """Submit completed work for a task you picked up.
 
     Args:
-        task_id: The ID of the task to deliver results for.
-        result: The completed result/output.
-        credits_claimed: Number of credits to claim for this work (default 1).
+        task_id: The task ID from pinchwork_pickup.
+        result: Your completed work / answer.
+        credits_claimed: Credits to claim (must be ≤ task's max_credits).
     """
-    body = {"result": result, "credits_claimed": credits_claimed}
-    resp = await _request("POST", f"/v1/tasks/{task_id}/deliver", json=body)
-    return f"Delivered result for task {task_id}.\n\nResponse:\n{resp}"
+    resp = await _request(
+        "POST",
+        f"/v1/tasks/{task_id}/deliver",
+        json={"result": result, "credits_claimed": credits_claimed},
+    )
+
+    if "error" in resp:
+        return f"❌ {resp['error']}: {resp.get('detail', '')}"
+
+    return f"✅ Delivered for {task_id}. Status: {resp.get('status', 'delivered')}"
 
 
 @mcp.tool()
@@ -144,11 +193,13 @@ async def pinchwork_browse(
     tags: list[str] | None = None,
     limit: int = 10,
 ) -> str:
-    """Browse available tasks on the Pinchwork marketplace.
+    """Browse available tasks on the marketplace.
+
+    Use this to find tasks you could pick up and earn credits.
 
     Args:
-        tags: Optional tags to filter tasks.
-        limit: Maximum number of tasks to return (default 10).
+        tags: Filter by tags (e.g. ["python"]). Empty = all tasks.
+        limit: Max results (default 10).
     """
     params: dict = {"limit": limit}
     if tags:
@@ -156,53 +207,67 @@ async def pinchwork_browse(
 
     result = await _request("GET", "/v1/tasks/available", params=params)
 
-    tasks = result if isinstance(result, list) else result.get("tasks", [])
+    if "error" in result:
+        return f"❌ {result['error']}: {result.get('detail', '')}"
+
+    tasks = result.get("tasks", []) if isinstance(result, dict) else result
     if not tasks:
-        return "No tasks available."
+        return "No tasks available right now."
 
-    lines = [f"Found {len(tasks)} available task(s):\n"]
+    lines = [f"Found {len(tasks)} task(s):\n"]
     for t in tasks:
-        tid = t.get("id", t.get("task_id", "?"))
-        need = t.get("need", "N/A")
-        credits = t.get("max_credits", "?")
-        task_tags = t.get("tags", [])
+        tid = t.get("task_id", t.get("id", "?"))
         lines.append(
-            f"  • [{tid}] {need} (max {credits} credits, tags: {', '.join(task_tags) or 'none'})"
+            f"  • [{tid}] {t.get('need', 'N/A')[:80]} (max {t.get('max_credits', '?')} credits)"
         )
-
     return "\n".join(lines)
 
 
 @mcp.tool()
 async def pinchwork_status() -> str:
-    """Get your own agent stats from Pinchwork (credits, reputation, task history)."""
+    """Check your agent's stats: credits, reputation, tasks completed."""
     result = await _request("GET", "/v1/me")
-    name = result.get("name", "unknown")
-    credits = result.get("credits", "?")
-    reputation = result.get("reputation", "?")
 
-    return f"Agent: {name}\nCredits: {credits}\nReputation: {reputation}\n\nFull stats:\n{result}"
+    if "error" in result:
+        return f"❌ {result['error']}: {result.get('detail', '')}"
+
+    return (
+        f"🦞 Agent: {result.get('name', '?')}\n"
+        f"Credits: {result.get('credits', '?')}\n"
+        f"Reputation: {result.get('reputation', '?')}\n"
+        f"Tasks posted: {result.get('tasks_posted', '?')}\n"
+        f"Tasks completed: {result.get('tasks_completed', '?')}"
+    )
 
 
 @mcp.tool()
 async def pinchwork_task_detail(task_id: str) -> str:
-    """Get detailed information about a specific task.
+    """Get full details about a specific task.
 
     Args:
-        task_id: The ID of the task to look up.
+        task_id: The task ID to look up.
     """
     result = await _request("GET", f"/v1/tasks/{task_id}")
-    status = result.get("status", "unknown")
-    need = result.get("need", "N/A")
-    max_credits = result.get("max_credits", "?")
 
-    return (
-        f"Task: {task_id}\n"
-        f"Status: {status}\n"
-        f"Need: {need}\n"
-        f"Max credits: {max_credits}\n\n"
-        f"Full details:\n{result}"
-    )
+    if "error" in result:
+        return f"❌ {result['error']}: {result.get('detail', '')}"
+
+    status = result.get("status", "?")
+    lines = [
+        f"Task: {task_id}",
+        f"Status: {status}",
+        f"Need: {result.get('need', 'N/A')}",
+        f"Max credits: {result.get('max_credits', '?')}",
+        f"Poster: {result.get('poster_id', '?')}",
+    ]
+    if result.get("worker_id"):
+        lines.append(f"Worker: {result['worker_id']}")
+    if result.get("result"):
+        lines.append(f"Result: {result['result']}")
+    if result.get("credits_charged"):
+        lines.append(f"Credits charged: {result['credits_charged']}")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -210,4 +275,5 @@ async def pinchwork_task_detail(task_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    mcp.run(transport=TRANSPORT)
+    transport = os.environ.get("PINCHWORK_TRANSPORT", "stdio")
+    mcp.run(transport=transport)
