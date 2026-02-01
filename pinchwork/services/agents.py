@@ -145,10 +145,10 @@ async def pay_referral_bonus(session: AsyncSession, worker_id: str) -> str | Non
 
 
 async def get_referral_stats(session: AsyncSession, agent_id: str) -> dict:
-    """Get referral stats for an agent."""
+    """Get referral stats for an agent. Caller must ensure agent exists."""
     agent = await session.get(Agent, agent_id)
     if not agent:
-        return {"error": "Agent not found"}
+        raise LookupError(f"Agent {agent_id} not found")
 
     # Count agents referred by this agent's code
     result = await session.execute(
