@@ -251,11 +251,7 @@ class PinchworkDeliverTool(_PinchworkMixin, BaseTool):
                 headers=self._headers,
                 json={
                     "result": result,
-                    **(
-                        {"credits_claimed": credits_claimed}
-                        if credits_claimed is not None
-                        else {}
-                    ),
+                    **({"credits_claimed": credits_claimed} if credits_claimed is not None else {}),
                 },
             )
             data = self._handle(resp)
