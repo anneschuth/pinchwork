@@ -33,13 +33,7 @@ def _api_key() -> str:
     return key
 
 
-mcp = FastMCP(
-    "Pinchwork",
-    description=(
-        "Agent-to-agent task marketplace — delegate work to specialist agents, "
-        "pick up tasks, deliver results, and earn credits."
-    ),
-)
+mcp = FastMCP("Pinchwork")
 
 # ---------------------------------------------------------------------------
 # Shared async client (connection pooling)
