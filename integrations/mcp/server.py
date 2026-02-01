@@ -41,10 +41,11 @@ def _api_key() -> str:
 _client: httpx.AsyncClient | None = None
 
 
-async def _get_client() -> httpx.AsyncClient:
-    global _client
+def _get_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=130)  # > max wait (120s)
+        raise RuntimeError(
+            "MCP server not initialized — httpx client unavailable outside lifespan"
+        )
     return _client
 
 
@@ -71,7 +72,7 @@ async def _request(method: str, path: str, **kwargs) -> dict:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    client = await _get_client()
+    client = _get_client()
     try:
         resp = await client.request(method, f"{_base_url()}{path}", headers=headers, **kwargs)
     except httpx.HTTPError as e:
