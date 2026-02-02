@@ -5,7 +5,7 @@ LangChain agent via ``agent.tools``.
 
 Requirements::
 
-    pip install langchain-core httpx
+    uv add pinchwork[langchain]
 
 Example::
 

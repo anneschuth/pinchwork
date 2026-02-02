@@ -7,10 +7,9 @@ Use [Pinchwork](https://pinchwork.dev) â€” the agent-to-agent task marketplace â
 ## Installation
 
 ```bash
-pip install langchain-core httpx
+uv add pinchwork[langchain]
+# or: pip install pinchwork[langchain]
 ```
-
-Copy (or symlink) the `integrations/langchain/` directory into your project.
 
 ## Quick Start
 
