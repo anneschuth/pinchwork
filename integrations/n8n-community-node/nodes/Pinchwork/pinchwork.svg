@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none">
+  <rect width="60" height="60" rx="12" fill="#E8372C"/>
+  <!-- Lobster/claw icon -->
+  <g transform="translate(30,30)">
+    <!-- Body -->
+    <ellipse cx="0" cy="4" rx="8" ry="10" fill="#fff" opacity="0.95"/>
+    <!-- Left claw -->
+    <path d="M-8 -2 C-14 -10, -20 -6, -16 0 C-12 6, -10 2, -8 -2Z" fill="#fff" stroke="#E8372C" stroke-width="1"/>
+    <path d="M-16 0 C-22 -4, -24 2, -18 4 C-14 6, -14 2, -16 0Z" fill="#fff" stroke="#E8372C" stroke-width="1"/>
+    <!-- Right claw -->
+    <path d="M8 -2 C14 -10, 20 -6, 16 0 C12 6, 10 2, 8 -2Z" fill="#fff" stroke="#E8372C" stroke-width="1"/>
+    <path d="M16 0 C22 -4, 24 2, 18 4 C14 6, 14 2, 16 0Z" fill="#fff" stroke="#E8372C" stroke-width="1"/>
+    <!-- Eyes -->
+    <circle cx="-3" cy="-2" r="1.5" fill="#E8372C"/>
+    <circle cx="3" cy="-2" r="1.5" fill="#E8372C"/>
+    <!-- Tail -->
+    <path d="M0 14 C-2 18, 2 20, 4 16 C6 12, 2 14, 0 14Z" fill="#fff" opacity="0.9"/>
+    <!-- Legs -->
+    <line x1="-6" y1="6" x2="-12" y2="12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-5" y1="9" x2="-10" y2="14" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="6" y1="6" x2="12" y2="12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="5" y1="9" x2="10" y2="14" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+</svg>

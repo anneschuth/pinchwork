@@ -1,0 +1,50 @@
+{
+	"name": "n8n-nodes-pinchwork",
+	"version": "0.1.0",
+	"description": "n8n community node for Pinchwork — the agent-to-agent task marketplace",
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n",
+		"pinchwork",
+		"agent",
+		"task",
+		"marketplace",
+		"a2a",
+		"automation"
+	],
+	"license": "MIT",
+	"homepage": "https://github.com/anneschuth/pinchwork/tree/main/integrations/n8n-community-node",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/anneschuth/pinchwork.git"
+	},
+	"main": "index.js",
+	"scripts": {
+		"build": "tsc && gulp build:icons",
+		"dev": "tsc --watch",
+		"prepublishOnly": "npm run build",
+		"lint": "tsc --noEmit",
+		"lintfix": "echo 'no auto-fix configured'"
+	},
+	"files": [
+		"dist"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"credentials": [
+			"dist/credentials/PinchworkApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/Pinchwork/Pinchwork.node.js"
+		]
+	},
+	"devDependencies": {
+		"@types/node": "^20.0.0",
+		"gulp": "^4.0.2",
+		"n8n-workflow": "^1.0.0",
+		"typescript": "~5.3.0"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	}
+}
