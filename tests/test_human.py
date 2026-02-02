@@ -4,7 +4,26 @@ from __future__ import annotations
 
 import pytest
 
+from pinchwork.config import settings
+from pinchwork.db_models import Agent
 from tests.conftest import auth_header, register_agent
+
+
+@pytest.fixture(autouse=True)
+async def ensure_platform_agent(db):
+    """Create the platform agent so welcome tasks can escrow credits."""
+    async with db() as session:
+        existing = await session.get(Agent, settings.platform_agent_id)
+        if not existing:
+            platform = Agent(
+                id=settings.platform_agent_id,
+                name="platform",
+                key_hash="",
+                key_fingerprint="",
+                credits=999_999_999,
+            )
+            session.add(platform)
+            await session.commit()
 
 
 @pytest.mark.anyio
@@ -229,3 +248,140 @@ async def test_dashboard_shows_visibility_note(client):
     resp = await client.get("/human")
     assert resp.status_code == 200
     assert "publicly visible" in resp.text
+
+
+@pytest.mark.anyio
+async def test_dashboard_hides_welcome_tasks(client):
+    """Welcome tasks should not appear on the public dashboard."""
+    # Register an agent - this creates a welcome task automatically
+    agent = await register_agent(client, "welcome-test-agent")
+
+    # Verify the welcome task exists via agent API
+    resp = await client.get("/v1/tasks/available", headers=auth_header(agent["api_key"]))
+    assert resp.status_code == 200
+    tasks = resp.json()["tasks"]
+    welcome_task = next((t for t in tasks if "Welcome to Pinchwork" in t.get("need", "")), None)
+    assert welcome_task is not None, "Welcome task should exist for new agent"
+
+    # Check dashboard doesn't show the welcome task
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+    assert "Welcome to Pinchwork" not in resp.text
+    assert welcome_task["task_id"] not in resp.text
+
+
+@pytest.mark.anyio
+async def test_dashboard_stats_exclude_welcome_tasks(client):
+    """Dashboard stats should not count welcome tasks."""
+    # Get initial stats
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+    initial_html = resp.text
+
+    # Extract task count from stats (looking for pattern like "<b>X</b> tasks")
+    import re
+
+    match = re.search(r"<b>(\d+)</b> tasks", initial_html)
+    initial_count = int(match.group(1)) if match else 0
+
+    # Register a new agent (creates welcome task)
+    agent = await register_agent(client, "stats-test-agent")
+
+    # Verify welcome task exists
+    resp = await client.get("/v1/tasks/available", headers=auth_header(agent["api_key"]))
+    welcome_tasks = [t for t in resp.json()["tasks"] if "Welcome to Pinchwork" in t.get("need", "")]
+    assert len(welcome_tasks) > 0
+
+    # Check stats haven't changed
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+    match = re.search(r"<b>(\d+)</b> tasks", resp.text)
+    new_count = int(match.group(1)) if match else 0
+    assert (
+        new_count == initial_count
+    ), "Welcome tasks should not be counted in dashboard stats"
+
+
+@pytest.mark.anyio
+async def test_welcome_task_detail_returns_404(client):
+    """Direct access to welcome task detail page should return 404."""
+    # Register agent and get welcome task ID
+    agent = await register_agent(client, "detail-404-test")
+    resp = await client.get("/v1/tasks/available", headers=auth_header(agent["api_key"]))
+    tasks = resp.json()["tasks"]
+    welcome_task = next((t for t in tasks if "Welcome to Pinchwork" in t.get("need", "")), None)
+    assert welcome_task is not None
+
+    # Try to access the welcome task detail page
+    resp = await client.get(f"/human/tasks/{welcome_task['task_id']}")
+    assert resp.status_code == 404
+    assert "not found" in resp.text.lower()
+
+
+@pytest.mark.anyio
+async def test_welcome_task_still_accessible_via_api(client):
+    """Welcome tasks should still be fully accessible via agent API endpoints."""
+    # Register agent
+    agent = await register_agent(client, "api-access-test")
+
+    # Get welcome task via API
+    resp = await client.get("/v1/tasks/available", headers=auth_header(agent["api_key"]))
+    assert resp.status_code == 200
+    tasks = resp.json()["tasks"]
+    welcome_task = next((t for t in tasks if "Welcome to Pinchwork" in t.get("need", "")), None)
+    assert welcome_task is not None
+
+    # Pickup the welcome task
+    resp = await client.post(
+        f"/v1/tasks/{welcome_task['task_id']}/pickup", headers=auth_header(agent["api_key"])
+    )
+    assert resp.status_code == 200
+
+    # Deliver the welcome task
+    resp = await client.post(
+        f"/v1/tasks/{welcome_task['task_id']}/deliver",
+        headers=auth_header(agent["api_key"]),
+        json={"result": "Hello! I'm ready to work."},
+    )
+    assert resp.status_code == 200
+
+    # Verify task is now delivered
+    resp = await client.get(
+        f"/v1/tasks/{welcome_task['task_id']}", headers=auth_header(agent["api_key"])
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "delivered"
+
+
+@pytest.mark.anyio
+async def test_dashboard_with_regular_and_welcome_tasks(client):
+    """Regular tasks should be visible, welcome tasks should be hidden."""
+    # Register agent (creates welcome task)
+    agent = await register_agent(client, "mixed-test-agent")
+
+    # Create a regular task
+    resp = await client.post(
+        "/v1/tasks",
+        json={"need": "Regular task for testing", "max_credits": 15},
+        headers=auth_header(agent["api_key"]),
+    )
+    assert resp.status_code == 201
+    regular_task_id = resp.json()["task_id"]
+
+    # Get welcome task ID
+    resp = await client.get("/v1/tasks/available", headers=auth_header(agent["api_key"]))
+    tasks = resp.json()["tasks"]
+    welcome_task = next((t for t in tasks if "Welcome to Pinchwork" in t.get("need", "")), None)
+    assert welcome_task is not None
+
+    # Check dashboard
+    resp = await client.get("/human")
+    assert resp.status_code == 200
+
+    # Regular task should be visible
+    assert "Regular task for testing" in resp.text
+    assert regular_task_id in resp.text
+
+    # Welcome task should NOT be visible
+    assert "Welcome to Pinchwork" not in resp.text
+    assert welcome_task["task_id"] not in resp.text

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, PlainTextResponse
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import col, select
 
@@ -381,7 +381,10 @@ async def _get_stats(session: AsyncSession) -> dict:
 
     result = await session.execute(
         select(Task.status, func.count())
-        .where(Task.is_system == False)  # noqa: E712
+        .where(
+            Task.is_system == False,  # noqa: E712
+            or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
+        )
         .group_by(Task.status)
     )
     status_counts = dict(result.all())
@@ -426,7 +429,10 @@ async def _get_stats(session: AsyncSession) -> dict:
 async def _get_recent_tasks(session: AsyncSession, limit: int = 20) -> list[dict]:
     result = await session.execute(
         select(Task)
-        .where(Task.is_system == False)  # noqa: E712
+        .where(
+            Task.is_system == False,  # noqa: E712
+            or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
+        )
         .order_by(col(Task.created_at).desc())
         .limit(limit)
     )
@@ -734,6 +740,7 @@ async def human_task_detail(
         select(Task).where(
             Task.id == task_id,
             Task.is_system == False,  # noqa: E712
+            or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
         )
     )
     row = result.first()
