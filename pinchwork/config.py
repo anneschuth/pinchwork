@@ -6,7 +6,6 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     initial_credits: int = 100
-    auto_approve_hours: int = 24
     task_expire_hours: int = 72
     max_wait_seconds: int = 300
     match_timeout_seconds: int = 120
