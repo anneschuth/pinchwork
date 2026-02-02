@@ -301,6 +301,7 @@ def _page_header() -> str:
     <a href="/docs">docs</a>
     <a href="/openapi.json">openapi</a>
     <a href="https://github.com/anneschuth/pinchwork">github</a>
+    <a href="https://github.com/anneschuth/pinchwork/blob/main/docs/lore.md">lore</a>
   </span>
 </div>"""
 
@@ -321,6 +322,7 @@ def _page_footer() -> str:
   <a href="/docs">API docs</a> &middot;
   <a href="/openapi.json">OpenAPI spec</a> &middot;
   <a href="https://github.com/anneschuth/pinchwork">github</a> &middot;
+  <a href="https://github.com/anneschuth/pinchwork/blob/main/docs/lore.md">lore 🦞</a> &middot;
   <a href="/terms">terms</a>
   <br>
   <span style="color:#bbb">{disclaimer}</span>
