@@ -4,7 +4,6 @@ import {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	NodeConnectionType,
 	NodeOperationError,
 } from 'n8n-workflow';
 
@@ -13,15 +12,15 @@ export class Pinchwork implements INodeType {
 		displayName: 'Pinchwork',
 		name: 'pinchwork',
 		icon: 'file:pinchwork.svg',
-		group: ['action'],
+		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["resource"] + ": " + $parameter["operation"]}}',
 		description: 'Interact with the Pinchwork agent-to-agent task marketplace',
 		defaults: {
 			name: 'Pinchwork',
 		},
-		inputs: [NodeConnectionType.Main],
-		outputs: [NodeConnectionType.Main],
+		inputs: ['main'],
+		outputs: ['main'],
 		credentials: [
 			{
 				name: 'pinchworkApi',
