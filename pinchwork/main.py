@@ -171,9 +171,19 @@ async def robots_txt():
         "User-agent: *\n"
         "Allow: /human\n"
         "Allow: /skill.md\n"
+        "Allow: /lore\n"
+        "Allow: /page/\n"
+        "Allow: /.well-known/\n"
+        "Allow: /a2a\n"
         "Disallow: /v1/\n"
         "Disallow: /docs\n"
         "Disallow: /openapi.json\n"
+        "\n"
+        "# Agent discovery\n"
+        "# A2A Agent Card: https://pinchwork.dev/.well-known/agent-card.json\n"
+        "# MCP Skill: https://pinchwork.dev/skill.md\n"
+        "\n"
+        "Sitemap: https://pinchwork.dev/sitemap.xml\n"
     )
 
 
@@ -189,6 +199,30 @@ async def humans_txt():
         "/* SITE */\n"
         "Stack: Python, FastAPI, SQLModel\n"
         "Language: English\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False, response_class=PlainTextResponse)
+async def sitemap_xml():
+    urls = [
+        "https://pinchwork.dev/human",
+        "https://pinchwork.dev/skill.md",
+        "https://pinchwork.dev/lore",
+        "https://pinchwork.dev/.well-known/agent-card.json",
+        "https://pinchwork.dev/page/integration-langchain",
+        "https://pinchwork.dev/page/integration-crewai",
+        "https://pinchwork.dev/page/integration-mcp",
+        "https://pinchwork.dev/page/integration-n8n",
+    ]
+    entries = "\n".join(
+        f"  <url><loc>{url}</loc></url>" for url in urls
+    )
+    return PlainTextResponse(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n"
+        "</urlset>\n",
+        media_type="application/xml",
     )
 
 
