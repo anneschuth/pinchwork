@@ -780,6 +780,7 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
     agents = result.all()
 
     agent_rows = ""
+    agent_cards = ""
     for (agent,) in agents:
         name = html.escape(agent.name or agent.id[:12])
         raw_good_at = agent.good_at or "—"
@@ -818,6 +819,7 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
             else ""
         )
 
+        # Desktop table rows
         agent_rows += (
             f"<tr>"
             f"<td><b>{name}</b>{infra_badge}</td>"
@@ -830,10 +832,32 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
             f"</tr>\n"
         )
 
+        # Mobile card layout
+        rep_html = f' &middot; <span style="color:{rep_color}">{rep_str}</span>' if rep != 0 else ""
+        tags_card = f'<div class="agent-card-tags">{tags_html}</div>' if tags_html else ""
+        agent_cards += (
+            f'<div class="agent-card">'
+            f'<div class="agent-card-header">'
+            f'<span class="agent-card-name">{name}</span>{infra_badge}'
+            f"</div>"
+            f'<div class="agent-card-skills">{good_at}</div>'
+            f"{tags_card}"
+            f'<div class="agent-card-meta">'
+            f"{agent.tasks_completed} done &middot; "
+            f"{agent.tasks_posted} posted{rep_html} &middot; "
+            f"{ago}"
+            f"</div>"
+            f"</div>\n"
+        )
+
     if not agents:
         agent_rows = (
             '<tr><td colspan="7" class="muted" style="text-align:center">'
             "No agents registered yet.</td></tr>"
+        )
+        agent_cards = (
+            '<div class="muted" style="text-align:center;padding:20px">'
+            "No agents registered yet.</div>"
         )
 
     total = len(agents)
@@ -853,13 +877,39 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
     margin-bottom: 10px;
   }}
   .agent-stats b {{ color: #cc3300; }}
+  .agent-cards {{ display: none; }}
+  .agent-card {{
+    border-bottom: 1px solid #e0e0e0;
+    padding: 10px 0;
+  }}
+  .agent-card:last-child {{ border-bottom: none; }}
+  .agent-card-header {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }}
+  .agent-card-name {{
+    font-weight: bold;
+    font-size: 10pt;
+    color: #000;
+  }}
+  .agent-card-skills {{
+    font-size: 9pt;
+    color: #444;
+    line-height: 1.4;
+    margin-bottom: 4px;
+  }}
+  .agent-card-tags {{
+    margin-bottom: 4px;
+  }}
+  .agent-card-meta {{
+    font-size: 8pt;
+    color: #999;
+  }}
   @media (max-width: 600px) {{
-    td:nth-child(3) {{ display: none; }}
-    td:nth-child(5) {{ display: none; }}
-    td:nth-child(6) {{ display: none; }}
-    th:nth-child(3) {{ display: none; }}
-    th:nth-child(5) {{ display: none; }}
-    th:nth-child(6) {{ display: none; }}
+    .agent-table {{ display: none; }}
+    .agent-cards {{ display: block; }}
   }}
 </style>
 </head>
@@ -875,7 +925,7 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
     <b>{total}</b> agents registered &middot;
     <b>{active}</b> active (posted or completed tasks)
   </div>
-  <table>
+  <table class="agent-table">
     <thead>
       <tr>
         <th>Agent</th>
@@ -891,6 +941,9 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
     {agent_rows}
     </tbody>
   </table>
+  <div class="agent-cards">
+    {agent_cards}
+  </div>
 </div>
 
 {_page_footer()}
