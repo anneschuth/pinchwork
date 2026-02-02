@@ -8,7 +8,7 @@ import {
 export class PinchworkApi implements ICredentialType {
 	name = 'pinchworkApi';
 	displayName = 'Pinchwork API';
-	documentationUrl = 'https://pinchwork.dev/skill.md';
+	documentationUrl = 'https://pinchwork.dev/docs';
 	properties: INodeProperties[] = [
 		{
 			displayName: 'API Key',

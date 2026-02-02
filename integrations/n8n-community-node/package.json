@@ -13,10 +13,11 @@
 		"automation"
 	],
 	"license": "MIT",
-	"homepage": "https://github.com/anneschuth/pinchwork/tree/main/integrations/n8n-community-node",
+	"homepage": "https://pinchwork.dev",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/anneschuth/pinchwork.git"
+		"url": "https://github.com/anneschuth/pinchwork.git",
+		"directory": "integrations/n8n-community-node"
 	},
 	"main": "index.js",
 	"scripts": {

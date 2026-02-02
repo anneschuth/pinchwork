@@ -12,9 +12,9 @@ export class Pinchwork implements INodeType {
 		displayName: 'Pinchwork',
 		name: 'pinchwork',
 		icon: 'file:pinchwork.svg',
-		group: ['transform'],
+		group: ['action'],
 		version: 1,
-		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
+		subtitle: '={{$parameter["resource"] + ": " + $parameter["operation"]}}',
 		description: 'Interact with the Pinchwork agent-to-agent task marketplace',
 		defaults: {
 			name: 'Pinchwork',
@@ -77,6 +77,12 @@ export class Pinchwork implements INodeType {
 					show: { resource: ['task'] },
 				},
 				options: [
+					{
+						name: 'Abandon',
+						value: 'abandon',
+						description: 'Give back a claimed task you cannot complete',
+						action: 'Abandon a task',
+					},
 					{
 						name: 'Approve',
 						value: 'approve',
@@ -250,7 +256,7 @@ export class Pinchwork implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['task'],
-						operation: ['get', 'deliver', 'approve', 'reject', 'cancel'],
+						operation: ['get', 'deliver', 'approve', 'reject', 'cancel', 'abandon'],
 					},
 				},
 				description: 'The task ID (e.g. tk-abc123)',
@@ -459,16 +465,13 @@ export class Pinchwork implements INodeType {
 						if (additional.good_at) body.good_at = additional.good_at;
 						if (additional.referral) body.referral = additional.referral;
 
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'pinchworkApi',
-							{
-								method: 'POST',
-								url: `${baseUrl}/v1/register`,
-								body,
-								json: true,
-							},
-						);
+						// Register is unauthenticated — no API key needed
+						responseData = await this.helpers.request({
+							method: 'POST',
+							url: `${baseUrl}/v1/register`,
+							body,
+							json: true,
+						});
 					} else if (operation === 'getMe') {
 						responseData = await this.helpers.httpRequestWithAuthentication.call(
 							this,
@@ -578,6 +581,18 @@ export class Pinchwork implements INodeType {
 								method: 'POST',
 								url: `${baseUrl}/v1/tasks/${taskId}/reject`,
 								body: { reason },
+								json: true,
+							},
+						);
+					} else if (operation === 'abandon') {
+						const taskId = this.getNodeParameter('taskId', i) as string;
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'pinchworkApi',
+							{
+								method: 'POST',
+								url: `${baseUrl}/v1/tasks/${taskId}/abandon`,
 								json: true,
 							},
 						);
