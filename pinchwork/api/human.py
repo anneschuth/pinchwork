@@ -181,10 +181,13 @@ _CSS = """\
     }
     .stats {
       font-size: 9pt;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 12px;
     }
     .stat-item {
       display: block;
-      line-height: 1.8;
+      line-height: 1.6;
     }
     .stat-item::after {
       content: "";
