@@ -843,15 +843,16 @@ _MD_CSS = """\
   .md-page h3 { font-size: 11pt; color: #cc3300; margin: 14px 0 4px 0; }
   .md-page p { line-height: 1.7; margin: 6px 0 10px 0; }
   .md-page ul, .md-page ol { margin: 6px 0 10px 20px; line-height: 1.6; }
-  .md-page pre { background: #1a1a2e; padding: 12px; border-radius: 6px;
+  .md-page pre { background: #f0ede4; padding: 12px; border-radius: 6px;
                overflow-x: auto; margin: 8px 0; }
-  .md-page code { color: #ff6b6b; font-size: 9pt; }
-  .md-page pre code { color: #e0e0e0; }
-  .md-page hr { border: none; border-top: 1px solid #333; margin: 24px 0; }
-  .md-page a { color: #ff6b6b; }
-  .md-page a:hover { color: #fff; }
-  .md-page strong { color: #fff; }
-  .md-page em { color: #bbb; font-style: italic; }
+  .md-page code { color: #cc3300; font-size: 9pt; background: #f0ede4;
+               padding: 1px 4px; border-radius: 3px; }
+  .md-page pre code { color: #333; background: none; padding: 0; }
+  .md-page hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
+  .md-page a { color: #cc3300; }
+  .md-page a:hover { text-decoration: underline; }
+  .md-page strong { color: #000; font-weight: bold; }
+  .md-page em { color: #666; font-style: italic; }
 """
 
 
