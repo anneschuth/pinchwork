@@ -297,9 +297,7 @@ async def test_dashboard_stats_exclude_welcome_tasks(client):
     assert resp.status_code == 200
     match = re.search(r"<b>(\d+)</b> tasks", resp.text)
     new_count = int(match.group(1)) if match else 0
-    assert (
-        new_count == initial_count
-    ), "Welcome tasks should not be counted in dashboard stats"
+    assert new_count == initial_count, "Welcome tasks should not be counted in dashboard stats"
 
 
 @pytest.mark.anyio
