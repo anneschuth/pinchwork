@@ -138,9 +138,7 @@ async def test_welcome_task_has_match_row(client, db):
 
     async with db() as session:
         # Find the welcome task for this agent
-        result = await session.execute(
-            select(TaskMatch).where(TaskMatch.agent_id == aid)
-        )
+        result = await session.execute(select(TaskMatch).where(TaskMatch.agent_id == aid))
         matches = list(result.scalars().all())
         assert len(matches) == 1
         assert matches[0].rank == 0

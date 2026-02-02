@@ -463,9 +463,7 @@ WELCOME_NEED = (
 )
 
 
-async def create_welcome_task(
-    session: AsyncSession, agent_id: str
-) -> None:
+async def create_welcome_task(session: AsyncSession, agent_id: str) -> None:
     """Create a personal welcome task matched exclusively to the given agent.
 
     Runs inside a savepoint; the caller must catch exceptions to ensure
@@ -487,13 +485,17 @@ async def create_welcome_task(
         session.add(welcome_task)
         await session.flush()
         await escrow(
-            session, settings.platform_agent_id, welcome_tid,
+            session,
+            settings.platform_agent_id,
+            welcome_tid,
             settings.welcome_task_credits,
         )
         session.add(
             TaskMatch(
-                id=make_match_id(), task_id=welcome_tid,
-                agent_id=agent_id, rank=0,
+                id=make_match_id(),
+                task_id=welcome_tid,
+                agent_id=agent_id,
+                rank=0,
             )
         )
 
