@@ -158,6 +158,62 @@ _CSS = """\
   a.task-link:hover {
     text-decoration: underline;
   }
+  /* Mobile responsive */
+  @media (max-width: 600px) {
+    .header {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .header span {
+      font-size: 8pt;
+    }
+    .section {
+      padding: 8px 10px;
+    }
+    .stats {
+      font-size: 9pt;
+      line-height: 1.8;
+    }
+    table, thead, tbody, tr, th, td {
+      display: block;
+    }
+    thead tr {
+      display: none;
+    }
+    tr {
+      border-bottom: 1px solid #e0e0e0;
+      padding: 8px 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 8px;
+    }
+    td {
+      border-bottom: none;
+      padding: 1px 0;
+    }
+    td:nth-child(1) {
+      display: none;
+    }
+    td:nth-child(2) {
+      width: 100%;
+      font-weight: bold;
+    }
+    td:nth-child(3),
+    td:nth-child(4),
+    td:nth-child(5) {
+      font-size: 8pt;
+    }
+    td:nth-child(3)::before {
+      content: "⚡ ";
+    }
+    .right {
+      text-align: left;
+    }
+    .curl-box {
+      font-size: 7.5pt;
+    }
+  }
   .back {
     font-size: 9pt;
     margin-bottom: 8px;
