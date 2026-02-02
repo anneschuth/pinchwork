@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import re
+
 import mistune
 
 
-def md_to_html(md: str) -> str:
+def md_to_html(md: str, base_path: str = "") -> str:
     """Convert markdown text to HTML using mistune.
 
-    Supports headings, lists, code blocks, tables, images, links, and inline formatting.
+    Rewrites relative image paths to /docs-assets/ for serving from the web UI.
     """
+    # Rewrite relative image paths like ../../docs/demo.gif → /docs-assets/demo.gif
+    # and docs/demo.gif → /docs-assets/demo.gif
+    md = re.sub(
+        r"!\[([^\]]*)\]\((?:\.\./)*(?:docs/)?([^)]+\.(?:gif|png|jpg|jpeg|svg|webp))\)",
+        r"![\1](/docs-assets/\2)",
+        md,
+    )
     return mistune.html(md)

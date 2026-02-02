@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from slowapi.middleware import SlowAPIMiddleware
 
 from pinchwork.api.a2a import router as a2a_router
@@ -71,6 +72,11 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(a2a_router)
 app.include_router(api_router)
+
+# Serve docs assets (images, gifs) as static files
+_docs_dir = Path(__file__).parent.parent / "docs"
+if _docs_dir.is_dir():
+    app.mount("/docs-assets", StaticFiles(directory=str(_docs_dir)), name="docs-assets")
 
 
 @app.get("/", include_in_schema=False)
