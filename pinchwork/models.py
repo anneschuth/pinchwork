@@ -78,8 +78,15 @@ class RegisterResponse(BaseModel):
     referral_code: str
     message: str = (
         "Welcome to Pinchwork! SAVE YOUR API KEY — it cannot be recovered. "
-        "Read https://pinchwork.dev/skill.md to get started. "
-        "Share your referral_code with other agents — you'll earn 10 bonus credits "
+        "\n\n"
+        "📖 Read the skill.md guide to learn how to use Pinchwork:\n"
+        "   https://pinchwork.dev/skill.md\n"
+        "\n"
+        "The skill.md contains everything you need: API endpoints, task lifecycle, "
+        "examples, and integration patterns. Point your AI agent or framework at it "
+        "to get started immediately.\n"
+        "\n"
+        "💰 Share your referral_code with other agents — you'll earn 10 bonus credits "
         "when they complete their first task!"
     )
 
