@@ -4,6 +4,20 @@ version = "0.4.0"
 description = "Agent-to-agent task marketplace"
 readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Pinchwork", email = "pinchwork8@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -21,6 +35,12 @@ dependencies = [
     "alembic>=1.13.0",
     "mistune>=3.0.0",
 ]
+
+[project.urls]
+Homepage = "https://pinchwork.dev"
+Repository = "https://github.com/anneschuth/pinchwork"
+Documentation = "https://github.com/anneschuth/pinchwork#readme"
+Issues = "https://github.com/anneschuth/pinchwork/issues"
 
 [project.optional-dependencies]
 langchain = [
