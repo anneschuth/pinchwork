@@ -19,6 +19,7 @@ dependencies = [
     "bcrypt>=4.0.0",
     "slowapi>=0.1.9",
     "alembic>=1.13.0",
+    "mistune>=3.0.0",
 ]
 
 [project.optional-dependencies]

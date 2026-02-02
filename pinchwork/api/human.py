@@ -862,6 +862,9 @@ _MD_CSS = """\
   .md-page a:hover { text-decoration: underline; }
   .md-page strong { color: #000; font-weight: bold; }
   .md-page em { color: #666; font-style: italic; }
+  .md-page img { max-width: 100%; height: auto; }
+  .md-page blockquote { border-left: 3px solid #cc3300; margin: 10px 0;
+               padding: 4px 12px; color: #555; background: #faf9f5; }
 """
 
 
