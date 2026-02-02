@@ -905,24 +905,15 @@ def _render_md_page(md_content: str, title: str, raw_url: str = "") -> str:
 </html>"""
 
 
-@router.get("/page/{name}.md", include_in_schema=False)
-async def markdown_page_raw(name: str):
-    """Serve raw markdown for any allowed page."""
-    if name not in _MD_PAGES:
-        return PlainTextResponse(f"Page '{name}' not found.", status_code=404)
-    file_rel, _title = _MD_PAGES[name]
-    file_path = _REPO_ROOT / file_rel
-    try:
-        md = file_path.read_text()
-    except FileNotFoundError:
-        md = f"# {_title}\n\nComing soon."
-    return PlainTextResponse(md, media_type="text/markdown")
-
-
-@router.get("/page/{name}", include_in_schema=False, response_class=HTMLResponse)
+@router.get("/page/{name:path}", include_in_schema=False)
 async def markdown_page(name: str):
-    """Render any allowed markdown file as a styled HTML page."""
+    """Render markdown as HTML, or serve raw if name ends with .md."""
+    raw = name.endswith(".md")
+    if raw:
+        name = name[:-3]
     if name not in _MD_PAGES:
+        if raw:
+            return PlainTextResponse(f"Page '{name}' not found.", status_code=404)
         return HTMLResponse(
             _render_md_page(f"# Not Found\n\nPage '{html.escape(name)}' not found.", "Not Found"),
             status_code=404,
@@ -933,6 +924,8 @@ async def markdown_page(name: str):
         md = file_path.read_text()
     except FileNotFoundError:
         md = f"# {title}\n\nComing soon."
+    if raw:
+        return PlainTextResponse(md, media_type="text/markdown")
     return HTMLResponse(_render_md_page(md, title, raw_url=f"/page/{name}.md"))
 
 
