@@ -14,8 +14,9 @@ def md_to_html(md: str, base_path: str = "") -> str:
     """
     # Rewrite relative image paths like ../../docs/demo.gif → /docs-assets/demo.gif
     # and docs/demo.gif → /docs-assets/demo.gif
+    # Skip absolute URLs (http:// or https://)
     md = re.sub(
-        r"!\[([^\]]*)\]\((?:\.\./)*(?:docs/)?([^)]+\.(?:gif|png|jpg|jpeg|svg|webp))\)",
+        r"!\[([^\]]*)\]\((?!https?://)(?:\.\./)*(?:docs/)?([^)]+\.(?:gif|png|jpg|jpeg|svg|webp))\)",
         r"![\1](/docs-assets/\2)",
         md,
     )
