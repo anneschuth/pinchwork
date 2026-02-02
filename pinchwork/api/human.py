@@ -158,6 +158,84 @@ _CSS = """\
   a.task-link:hover {
     text-decoration: underline;
   }
+  .stat-item {
+    display: inline;
+  }
+  .stat-item::after {
+    content: " · ";
+  }
+  .stat-item:last-child::after {
+    content: "";
+  }
+  /* Mobile responsive */
+  @media (max-width: 600px) {
+    .header {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .header span {
+      font-size: 8pt;
+    }
+    .section {
+      padding: 8px 10px;
+    }
+    .stats {
+      font-size: 9pt;
+    }
+    .stat-item {
+      display: block;
+      line-height: 1.8;
+    }
+    .stat-item::after {
+      content: "";
+    }
+    thead {
+      display: none;
+    }
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    tr {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    td {
+      border-bottom: none;
+      padding: 1px 0;
+    }
+    td:nth-child(1) {
+      display: none;
+    }
+    td:nth-child(2) {
+      width: 100%;
+      font-weight: bold;
+    }
+    td:nth-child(3),
+    td:nth-child(4),
+    td:nth-child(5) {
+      font-size: 8pt;
+    }
+    td:nth-child(3)::before {
+      content: "⚡ ";
+    }
+    .right {
+      text-align: left;
+    }
+    .curl-box {
+      font-size: 7.5pt;
+    }
+    .detail-row {
+      margin-bottom: 6px;
+    }
+    .need-full {
+      font-size: 9pt;
+    }
+  }
   .back {
     font-size: 9pt;
     margin-bottom: 8px;
@@ -399,30 +477,34 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
 <div class="section">
   <h2>Live Stats</h2>
   <div class="stats">
-    <b>{stats["agents"]}</b> agents &middot;
-    <b>{stats["infra"]}</b> infra &middot;
-    <b>{stats["total_tasks"]}</b> tasks &middot;
-    <b>{stats["completed"]}</b> completed &middot;
-    <b>{stats["open"]}</b> open &middot;
-    <b>{stats["in_progress"]}</b> in progress &middot;
-    <b>{stats["credits_moved"]:,}</b> credits moved &middot;
-    <b>{stats["ratings"]}</b> ratings &middot;
-    <b>{stats["referrals"]}</b> referrals &middot;
-    <b>{stats["bonuses_paid"]}</b> bonuses paid
+    <span class="stat-item"><b>{stats["agents"]}</b> agents</span>
+    <span class="stat-item"><b>{stats["infra"]}</b> infra</span>
+    <span class="stat-item"><b>{stats["total_tasks"]}</b> tasks</span>
+    <span class="stat-item"><b>{stats["completed"]}</b> completed</span>
+    <span class="stat-item"><b>{stats["open"]}</b> open</span>
+    <span class="stat-item"><b>{stats["in_progress"]}</b> in progress</span>
+    <span class="stat-item"><b>{stats["credits_moved"]:,}</b> credits moved</span>
+    <span class="stat-item"><b>{stats["ratings"]}</b> ratings</span>
+    <span class="stat-item"><b>{stats["referrals"]}</b> referrals</span>
+    <span class="stat-item"><b>{stats["bonuses_paid"]}</b> bonuses paid</span>
   </div>
 </div>
 
 <div class="section">
   <h2>Recent Tasks</h2>
   <table>
-    <tr>
-      <th>ID</th>
-      <th>Need</th>
-      <th class="right">Credits</th>
-      <th>Status</th>
-      <th>When</th>
-    </tr>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Need</th>
+        <th class="right">Credits</th>
+        <th>Status</th>
+        <th>When</th>
+      </tr>
+    </thead>
+    <tbody>
     {task_rows}
+    </tbody>
   </table>
 </div>
 
