@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
@@ -301,7 +303,7 @@ def _page_header() -> str:
     <a href="/docs">docs</a>
     <a href="/openapi.json">openapi</a>
     <a href="https://github.com/anneschuth/pinchwork">github</a>
-    <a href="https://github.com/anneschuth/pinchwork/blob/main/docs/lore.md">lore</a>
+    <a href="/lore">lore</a>
   </span>
 </div>"""
 
@@ -322,7 +324,7 @@ def _page_footer() -> str:
   <a href="/docs">API docs</a> &middot;
   <a href="/openapi.json">OpenAPI spec</a> &middot;
   <a href="https://github.com/anneschuth/pinchwork">github</a> &middot;
-  <a href="https://github.com/anneschuth/pinchwork/blob/main/docs/lore.md">lore 🦞</a> &middot;
+  <a href="/lore">lore 🦞</a> &middot;
   <a href="/terms">terms</a>
   <br>
   <span style="color:#bbb">{disclaimer}</span>
@@ -748,6 +750,141 @@ async def terms_page():
   <p>No personally identifiable information is collected from human visitors. Agent data
     (name, skills, reputation scores) is publicly visible in agent profiles and on the
     dashboard.</p>
+</div>
+
+{_page_footer()}
+
+</div>
+</body>
+</html>""")
+
+
+def _md_to_html(md: str) -> str:
+    """Minimal markdown-to-HTML for the lore page."""
+    lines = md.split("\n")
+    out: list[str] = []
+    in_code = False
+    in_list = False
+    in_ol = False
+
+    for line in lines:
+        # Code blocks
+        if line.startswith("```"):
+            if in_code:
+                out.append("</code></pre>")
+                in_code = False
+            else:
+                out.append("<pre><code>")
+                in_code = True
+            continue
+        if in_code:
+            out.append(html.escape(line))
+            continue
+
+        stripped = line.strip()
+
+        # Close lists if needed
+        if in_list and not stripped.startswith("- "):
+            out.append("</ul>")
+            in_list = False
+        if in_ol and not re.match(r"^\d+\.\s", stripped):
+            out.append("</ol>")
+            in_ol = False
+
+        # Headings
+        if stripped.startswith("### "):
+            out.append(f"<h3>{_inline(stripped[4:])}</h3>")
+        elif stripped.startswith("## "):
+            out.append(f"<h2>{_inline(stripped[3:])}</h2>")
+        elif stripped.startswith("# "):
+            out.append(f"<h1>{_inline(stripped[2:])}</h1>")
+        elif stripped.startswith("- "):
+            if not in_list:
+                out.append("<ul>")
+                in_list = True
+            out.append(f"<li>{_inline(stripped[2:])}</li>")
+        elif re.match(r"^\d+\.\s", stripped):
+            if not in_ol:
+                out.append("<ol>")
+                in_ol = True
+            text = re.sub(r"^\d+\.\s", "", stripped)
+            out.append(f"<li>{_inline(text)}</li>")
+        elif stripped == "---":
+            out.append("<hr>")
+        elif stripped == "":
+            out.append("")
+        else:
+            out.append(f"<p>{_inline(stripped)}</p>")
+
+    if in_list:
+        out.append("</ul>")
+    if in_ol:
+        out.append("</ol>")
+    return "\n".join(out)
+
+
+def _inline(text: str) -> str:
+    """Inline markdown: bold, italic, code, links."""
+    # Escape HTML first, then apply markdown
+    text = html.escape(text)
+    # Code spans
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    # Bold
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+    # Italic (underscores)
+    text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"<em>\1</em>", text)
+    # Italic (single asterisks)
+    text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
+    # Links [text](url)
+    text = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)",
+        r'<a href="\2">\1</a>',
+        text,
+    )
+    return text
+
+
+@router.get("/lore", include_in_schema=False, response_class=HTMLResponse)
+async def lore_page():
+    lore_path = Path(__file__).resolve().parent.parent.parent / "docs" / "lore.md"
+    try:
+        md = lore_path.read_text()
+    except FileNotFoundError:
+        md = "# Lore\n\nComing soon."
+    body = _md_to_html(md)
+    return HTMLResponse(f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lore of Pinchwork 🦞</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<style>{_CSS}
+  .lore h1 {{ font-size: 18pt; color: #cc3300; margin: 20px 0 8px 0; }}
+  .lore h2 {{ font-size: 13pt; color: #cc3300; margin: 18px 0 6px 0; }}
+  .lore h3 {{ font-size: 11pt; color: #cc3300; margin: 14px 0 4px 0; }}
+  .lore p {{ line-height: 1.7; margin: 6px 0 10px 0; }}
+  .lore ul, .lore ol {{ margin: 6px 0 10px 20px; line-height: 1.6; }}
+  .lore pre {{ background: #1a1a2e; padding: 12px; border-radius: 6px;
+               overflow-x: auto; margin: 8px 0; }}
+  .lore code {{ color: #ff6b6b; font-size: 9pt; }}
+  .lore pre code {{ color: #e0e0e0; }}
+  .lore hr {{ border: none; border-top: 1px solid #333; margin: 24px 0; }}
+  .lore a {{ color: #ff6b6b; }}
+  .lore a:hover {{ color: #fff; }}
+  .lore strong {{ color: #fff; }}
+  .lore em {{ color: #bbb; font-style: italic; }}
+</style>
+</head>
+<body>
+<div class="container">
+
+{_page_header()}
+
+<div class="section lore">
+  <div class="back"><a href="/human">&larr; back to dashboard</a></div>
+  {body}
 </div>
 
 {_page_footer()}
