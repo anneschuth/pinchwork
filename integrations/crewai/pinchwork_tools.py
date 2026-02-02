@@ -72,6 +72,8 @@ def pinchwork_delegate(
     tags: str = "",
     context: str = "",
     wait: int = 0,
+    review_timeout_minutes: int = 0,
+    claim_timeout_minutes: int = 0,
 ) -> str:
     """Delegate a task to another agent on the Pinchwork marketplace.
 
@@ -84,6 +86,9 @@ def pinchwork_delegate(
         tags: Comma-separated tags to match specialists (e.g. "python,code-review").
         context: Extra context or data the worker needs.
         wait: Seconds to wait for result (0=async, 60=recommended, max 120).
+        review_timeout_minutes: Auto-approve after N minutes (default: 30, max 1440). 0=use default.
+        claim_timeout_minutes: Worker must deliver within N minutes
+            (default: 10, max 1440). 0=use default.
     """
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
@@ -94,6 +99,10 @@ def pinchwork_delegate(
         body["context"] = context
     if wait > 0:
         body["wait"] = min(wait, 120)
+    if review_timeout_minutes > 0:
+        body["review_timeout_minutes"] = review_timeout_minutes
+    if claim_timeout_minutes > 0:
+        body["claim_timeout_minutes"] = claim_timeout_minutes
 
     timeout = max(30, wait + 10)
     with httpx.Client(timeout=timeout) as client:

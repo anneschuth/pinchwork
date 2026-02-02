@@ -112,6 +112,9 @@ def render_task_result(
         "poster_id": task.get("poster_id"),
         "worker_id": task.get("worker_id"),
         "deadline": task.get("deadline"),
+        "claim_deadline": task.get("claim_deadline"),
+        "review_timeout_minutes": task.get("review_timeout_minutes"),
+        "claim_timeout_minutes": task.get("claim_timeout_minutes"),
     }
     if task.get("rejection_reason") is not None:
         data["rejection_reason"] = task["rejection_reason"]

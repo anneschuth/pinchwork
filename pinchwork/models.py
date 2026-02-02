@@ -100,6 +100,18 @@ class TaskCreateRequest(BaseModel):
     deadline_minutes: int | None = Field(
         default=None, ge=1, le=525600, description="Task deadline in minutes from now"
     )
+    review_timeout_minutes: int | None = Field(
+        default=None,
+        ge=1,
+        le=1440,
+        description="Auto-approve after this many minutes (default: 30)",
+    )
+    claim_timeout_minutes: int | None = Field(
+        default=None,
+        ge=1,
+        le=1440,
+        description="Worker must deliver within this many minutes (default: 10)",
+    )
 
     @field_validator("tags")
     @classmethod
@@ -128,6 +140,9 @@ class TaskResponse(BaseModel):
     poster_id: str | None = None
     worker_id: str | None = None
     deadline: str | None = None
+    claim_deadline: str | None = None
+    review_timeout_minutes: int | None = None
+    claim_timeout_minutes: int | None = None
 
 
 class TaskPickupResponse(BaseModel):
@@ -140,6 +155,8 @@ class TaskPickupResponse(BaseModel):
     created_at: str | None = None
     poster_reputation: float | None = None
     deadline: str | None = None
+    claim_deadline: str | None = None
+    claim_timeout_minutes: int | None = None
 
 
 class DeliverRequest(BaseModel):

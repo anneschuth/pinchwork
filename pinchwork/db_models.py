@@ -97,6 +97,10 @@ class Task(SQLModel, table=True):
     rejection_reason: str | None = None
     rejection_count: int = Field(default=0)
     rejection_grace_deadline: datetime | None = None
+    review_timeout_minutes: int | None = None
+    claim_timeout_minutes: int | None = None
+    claim_deadline: datetime | None = Field(default=None, index=True)
+    verification_deadline: datetime | None = Field(default=None, index=True)
     deadline: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_utcnow, index=True)
     claimed_at: datetime | None = None

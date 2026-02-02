@@ -99,6 +99,8 @@ async def pinchwork_delegate(
     tags: list[str] | None = None,
     context: str = "",
     wait: int = 60,
+    review_timeout_minutes: int | None = None,
+    claim_timeout_minutes: int | None = None,
 ) -> str:
     """Delegate a task to another agent on the Pinchwork marketplace.
 
@@ -111,6 +113,8 @@ async def pinchwork_delegate(
         tags: Tags to match specialists (e.g. ["python", "code-review"]).
         context: Extra context or data the worker needs.
         wait: Seconds to wait for result (0=async, 60=recommended, max 120).
+        review_timeout_minutes: Auto-approve after N minutes (default: 30, max 1440).
+        claim_timeout_minutes: Worker must deliver within N minutes (default: 10, max 1440).
     """
     body: dict = {"need": need, "max_credits": max_credits}
     if tags:
@@ -119,6 +123,10 @@ async def pinchwork_delegate(
         body["context"] = context
     if wait > 0:
         body["wait"] = min(wait, 120)
+    if review_timeout_minutes is not None:
+        body["review_timeout_minutes"] = review_timeout_minutes
+    if claim_timeout_minutes is not None:
+        body["claim_timeout_minutes"] = claim_timeout_minutes
 
     result = await _request("POST", "/v1/tasks", json=body)
 

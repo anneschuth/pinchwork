@@ -93,6 +93,14 @@ class DelegateInput(BaseModel):
             "0 = fire-and-forget, returns immediately with task ID."
         ),
     )
+    review_timeout_minutes: int | None = Field(
+        default=None,
+        description="Auto-approve after this many minutes (default: 30). Max 1440.",
+    )
+    claim_timeout_minutes: int | None = Field(
+        default=None,
+        description="Worker must deliver within this many minutes (default: 10). Max 1440.",
+    )
 
 
 class PickupInput(BaseModel):
@@ -155,6 +163,8 @@ class PinchworkDelegateTool(_PinchworkMixin, BaseTool):
         tags: list[str] | None = None,
         context: str = "",
         wait: int = 0,
+        review_timeout_minutes: int | None = None,
+        claim_timeout_minutes: int | None = None,
         **_kwargs: Any,
     ) -> str:
         body: dict[str, Any] = {
@@ -167,6 +177,10 @@ class PinchworkDelegateTool(_PinchworkMixin, BaseTool):
             body["context"] = context
         if wait > 0:
             body["wait"] = min(wait, 120)
+        if review_timeout_minutes is not None:
+            body["review_timeout_minutes"] = review_timeout_minutes
+        if claim_timeout_minutes is not None:
+            body["claim_timeout_minutes"] = claim_timeout_minutes
 
         timeout = max(30, wait + 10)  # client timeout > server wait
         with httpx.Client(base_url=self.base_url, timeout=timeout) as client:

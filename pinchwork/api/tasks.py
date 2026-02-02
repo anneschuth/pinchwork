@@ -88,6 +88,8 @@ async def delegate_task(
         tags=validated.tags,
         context=validated.context,
         deadline_minutes=validated.deadline_minutes,
+        review_timeout_minutes=validated.review_timeout_minutes,
+        claim_timeout_minutes=validated.claim_timeout_minutes,
     )
 
     if validated.wait:

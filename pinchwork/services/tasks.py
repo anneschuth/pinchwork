@@ -212,6 +212,9 @@ async def _maybe_spawn_verification(session: AsyncSession, task: Task) -> None:
     session.add(system_task)
 
     task.verification_status = VerificationStatus.pending
+    task.verification_deadline = datetime.now(UTC) + timedelta(
+        seconds=settings.verification_timeout_seconds
+    )
     session.add(task)
 
 
@@ -297,10 +300,11 @@ async def _process_verify_result(session: AsyncSession, system_task: Task) -> No
     if meets:
         parent.verification_status = VerificationStatus.passed
         # Verification is advisory — poster always has final say.
-        # Auto-approve is handled by the 24h background job, not here.
+        # Auto-approve is handled by the background job, not here.
     else:
         parent.verification_status = VerificationStatus.failed
 
+    parent.verification_deadline = None  # Clear stale deadline
     session.add(parent)
 
 
@@ -461,6 +465,8 @@ async def create_task(
     tags: list[str] | None = None,
     context: str | None = None,
     deadline_minutes: int | None = None,
+    review_timeout_minutes: int | None = None,
+    claim_timeout_minutes: int | None = None,
 ) -> dict:
     """Create a task and escrow credits atomically in one transaction."""
     tid = make_task_id()
@@ -480,6 +486,8 @@ async def create_task(
         tags=tags_json,
         expires_at=expires_at,
         deadline=deadline,
+        review_timeout_minutes=review_timeout_minutes,
+        claim_timeout_minutes=claim_timeout_minutes,
     )
     session.add(task)
     # Flush so the task row exists for FK on ledger
@@ -520,6 +528,9 @@ async def get_task(session: AsyncSession, tid: str) -> dict | None:
         "delivered_at": task.delivered_at.isoformat() if task.delivered_at else None,
         "expires_at": task.expires_at.isoformat() if task.expires_at else None,
         "deadline": task.deadline.isoformat() if task.deadline else None,
+        "claim_deadline": task.claim_deadline.isoformat() if task.claim_deadline else None,
+        "review_timeout_minutes": task.review_timeout_minutes,
+        "claim_timeout_minutes": task.claim_timeout_minutes,
     }
 
 
@@ -688,15 +699,25 @@ async def _try_pickup_system_task(session: AsyncSession, worker_id: str) -> dict
 
 async def _try_claim(session: AsyncSession, task: Task, worker_id: str) -> dict | None:
     """Atomically claim a task. Returns pickup dict or None if lost race."""
+    now = datetime.now(UTC)
     claim_result = await session.execute(
         text(
             "UPDATE tasks SET status = 'claimed', worker_id = :worker_id, "
             "claimed_at = :now WHERE id = :id AND status = 'posted'"
         ),
-        {"worker_id": worker_id, "now": datetime.now(UTC), "id": task.id},
+        {"worker_id": worker_id, "now": now, "id": task.id},
     )
     if claim_result.rowcount == 0:
         return None
+
+    # Set claim_deadline for non-system tasks
+    if not task.is_system:
+        timeout_min = task.claim_timeout_minutes or settings.default_claim_timeout_minutes
+        claim_deadline = now + timedelta(minutes=timeout_min)
+        await session.execute(
+            text("UPDATE tasks SET claim_deadline = :dl WHERE id = :id"),
+            {"dl": claim_deadline, "id": task.id},
+        )
 
     await session.commit()
     await session.refresh(task)
@@ -718,6 +739,8 @@ async def _try_claim(session: AsyncSession, task: Task, worker_id: str) -> dict 
         "created_at": task.created_at.isoformat() if task.created_at else None,
         "poster_reputation": poster_rep,
         "deadline": task.deadline.isoformat() if task.deadline else None,
+        "claim_deadline": task.claim_deadline.isoformat() if task.claim_deadline else None,
+        "claim_timeout_minutes": task.claim_timeout_minutes,
     }
 
 
@@ -782,7 +805,8 @@ async def deliver_task(
     deliver_result = await session.execute(
         text(
             "UPDATE tasks SET status = 'delivered', result = :result, "
-            "credits_charged = :credits, delivered_at = :now "
+            "credits_charged = :credits, delivered_at = :now, "
+            "claim_deadline = NULL "
             "WHERE id = :id AND status = 'claimed'"
         ),
         {
@@ -920,7 +944,8 @@ async def reject_task(
             "credits_charged = NULL, delivered_at = NULL, "
             "rejection_reason = :reason, "
             "rejection_count = COALESCE(rejection_count, 0) + 1, "
-            "rejection_grace_deadline = :grace "
+            "rejection_grace_deadline = :grace, "
+            "claim_deadline = :grace "
             "WHERE id = :id AND status = 'delivered'"
         ),
         {"reason": reason, "grace": grace_deadline, "id": tid},
@@ -933,11 +958,55 @@ async def reject_task(
     rejected_worker_id = task.worker_id
     await session.refresh(task)
 
-    # Update trust poster→worker (negative)
+    # Update trust poster→worker (negative) — applies to both branches
     from pinchwork.services.trust import update_trust
 
     if rejected_worker_id:
         await update_trust(session, poster_id, rejected_worker_id, positive=False)
+
+    # Check max rejections: if exceeded, release worker and reset to posted
+    if task.rejection_count >= settings.max_rejections:
+        new_expires = datetime.now(UTC) + timedelta(hours=settings.task_expire_hours)
+        await session.execute(
+            text(
+                "UPDATE tasks SET status = 'posted', worker_id = NULL, "
+                "claimed_at = NULL, claim_deadline = NULL, "
+                "rejection_grace_deadline = NULL, "
+                "expires_at = :expires, match_status = 'broadcast' "
+                "WHERE id = :id AND status = 'claimed'"
+            ),
+            {"expires": new_expires, "id": tid},
+        )
+        await session.refresh(task)
+
+        await session.commit()
+
+        if rejected_worker_id:
+            event_bus.publish(
+                rejected_worker_id,
+                Event(
+                    type="task_rejected",
+                    task_id=tid,
+                    data={
+                        "reason": reason,
+                        "max_rejections_reached": True,
+                    },
+                ),
+            )
+
+        return {
+            "id": task.id,
+            "poster_id": task.poster_id,
+            "worker_id": None,
+            "need": task.need,
+            "context": task.context,
+            "result": None,
+            "status": "posted",
+            "max_credits": task.max_credits,
+            "credits_charged": None,
+            "rejection_reason": reason,
+            "rejection_count": task.rejection_count,
+        }
 
     await session.commit()
 
@@ -1028,7 +1097,7 @@ async def abandon_task(session: AsyncSession, tid: str, worker_id: str) -> dict:
     abandon_result = await session.execute(
         text(
             "UPDATE tasks SET status = 'posted', worker_id = NULL, claimed_at = NULL, "
-            "expires_at = :expires, match_status = 'broadcast' "
+            "claim_deadline = NULL, expires_at = :expires, match_status = 'broadcast' "
             "WHERE id = :id AND status = 'claimed'"
         ),
         {"expires": new_expires, "id": tid},
@@ -1259,6 +1328,10 @@ async def list_my_tasks(
             "credits_charged": t.credits_charged,
             "poster_id": t.poster_id,
             "worker_id": t.worker_id,
+            "deadline": t.deadline.isoformat() if t.deadline else None,
+            "claim_deadline": t.claim_deadline.isoformat() if t.claim_deadline else None,
+            "review_timeout_minutes": t.review_timeout_minutes,
+            "claim_timeout_minutes": t.claim_timeout_minutes,
         }
 
     return {"tasks": [_task_to_response(t) for t in page], "total": total}

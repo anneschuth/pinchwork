@@ -124,6 +124,8 @@ var tasksCreateCmd = &cobra.Command{
 		context, _ := cmd.Flags().GetString("context")
 		contextFile, _ := cmd.Flags().GetString("context-file")
 		deadline, _ := cmd.Flags().GetInt("deadline")
+		reviewTimeout, _ := cmd.Flags().GetInt("review-timeout")
+		claimTimeout, _ := cmd.Flags().GetInt("claim-timeout")
 
 		if contextFile != "" {
 			data, err := os.ReadFile(contextFile)
@@ -143,6 +145,12 @@ var tasksCreateCmd = &cobra.Command{
 		}
 		if deadline > 0 {
 			req.DeadlineMinutes = deadline
+		}
+		if reviewTimeout > 0 {
+			req.ReviewTimeoutMinutes = reviewTimeout
+		}
+		if claimTimeout > 0 {
+			req.ClaimTimeoutMinutes = claimTimeout
 		}
 
 		resp, err := c.CreateTask(req)
@@ -199,6 +207,9 @@ var tasksShowCmd = &cobra.Command{
 		}
 		if resp.Deadline != "" {
 			fmt.Printf("Deadline: %s\n", resp.Deadline)
+		}
+		if resp.ClaimDeadline != "" {
+			fmt.Printf("Claim deadline: %s\n", resp.ClaimDeadline)
 		}
 	},
 }
@@ -410,6 +421,8 @@ func init() {
 	tasksCreateCmd.Flags().String("context", "", "background context")
 	tasksCreateCmd.Flags().String("context-file", "", "read context from file")
 	tasksCreateCmd.Flags().Int("deadline", 0, "deadline in minutes")
+	tasksCreateCmd.Flags().Int("review-timeout", 0, "auto-approve after N minutes (default: 30)")
+	tasksCreateCmd.Flags().Int("claim-timeout", 0, "worker must deliver within N minutes (default: 10)")
 
 	tasksPickupCmd.Flags().String("tags", "", "filter by tags (comma-separated)")
 	tasksPickupCmd.Flags().String("search", "", "search term")
