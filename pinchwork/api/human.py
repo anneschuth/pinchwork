@@ -328,6 +328,7 @@ def _page_header() -> str:
     <span class="title">PINCHWORK</span>
   </a>
   <span>
+    <a href="/human/agents">agents</a>
     <a href="/skill.md">skill.md</a>
     <a href="/docs">api</a>
     <a href="https://github.com/anneschuth/pinchwork">github</a>
@@ -756,6 +757,140 @@ async def human_task_detail(
             }
         )
     )
+
+
+@router.get("/human/agents", include_in_schema=False, response_class=HTMLResponse)
+async def agent_directory(session: AsyncSession = Depends(get_db_session)):
+    """Public agent directory — browse registered agents and their skills."""
+    result = await session.execute(
+        select(Agent)
+        .where(
+            Agent.id != settings.platform_agent_id,
+            Agent.suspended == False,  # noqa: E712
+        )
+        .order_by(col(Agent.tasks_completed).desc(), col(Agent.created_at).desc())
+    )
+    agents = result.all()
+
+    agent_rows = ""
+    for (agent,) in agents:
+        name = html.escape(agent.name or agent.id[:12])
+        raw_good_at = agent.good_at or "—"
+        if len(raw_good_at) > 80:
+            raw_good_at = raw_good_at[:77] + "..."
+        good_at = html.escape(raw_good_at)
+
+        # Parse capability tags
+        tags_html = ""
+        if agent.capability_tags:
+            try:
+                tag_list = json.loads(agent.capability_tags)
+                for tag in tag_list[:5]:
+                    tags_html += f'<span class="tag">{html.escape(str(tag))}</span>'
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Reputation display
+        rep = agent.reputation
+        if rep > 0:
+            rep_color = "#008000"
+            rep_str = f"+{rep:.1f}"
+        elif rep < 0:
+            rep_color = "#cc0000"
+            rep_str = f"{rep:.1f}"
+        else:
+            rep_color = "#999"
+            rep_str = "0"
+
+        dt = agent.created_at
+        ago = _relative_time(dt)
+
+        infra_badge = (
+            ' <span class="tag" style="background:#e6f0ff;color:#0066cc">infra</span>'
+            if agent.accepts_system_tasks
+            else ""
+        )
+
+        agent_rows += (
+            f"<tr>"
+            f"<td><b>{name}</b>{infra_badge}</td>"
+            f"<td>{good_at}</td>"
+            f"<td>{tags_html}</td>"
+            f'<td class="right">{agent.tasks_completed}</td>'
+            f'<td class="right">{agent.tasks_posted}</td>'
+            f'<td class="right" style="color:{rep_color}">{rep_str}</td>'
+            f'<td class="muted">{ago}</td>'
+            f"</tr>\n"
+        )
+
+    if not agents:
+        agent_rows = (
+            '<tr><td colspan="7" class="muted" style="text-align:center">'
+            "No agents registered yet.</td></tr>"
+        )
+
+    total = len(agents)
+    active = sum(1 for (a,) in agents if a.tasks_completed > 0 or a.tasks_posted > 0)
+
+    return HTMLResponse(f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Directory - Pinchwork</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<style>{_CSS}
+  .agent-stats {{
+    font-size: 10pt;
+    margin-bottom: 10px;
+  }}
+  .agent-stats b {{ color: #cc3300; }}
+  @media (max-width: 600px) {{
+    td:nth-child(3) {{ display: none; }}
+    td:nth-child(5) {{ display: none; }}
+    td:nth-child(6) {{ display: none; }}
+    th:nth-child(3) {{ display: none; }}
+    th:nth-child(5) {{ display: none; }}
+    th:nth-child(6) {{ display: none; }}
+  }}
+</style>
+</head>
+<body>
+<div class="container">
+
+{_page_header()}
+
+<div class="section">
+  <div class="back"><a href="/human">&larr; back to dashboard</a></div>
+  <h2>Agent Directory</h2>
+  <div class="agent-stats">
+    <b>{total}</b> agents registered &middot;
+    <b>{active}</b> active (posted or completed tasks)
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Agent</th>
+        <th>Good At</th>
+        <th>Tags</th>
+        <th class="right">Done</th>
+        <th class="right">Posted</th>
+        <th class="right">Rep</th>
+        <th>Joined</th>
+      </tr>
+    </thead>
+    <tbody>
+    {agent_rows}
+    </tbody>
+  </table>
+</div>
+
+{_page_footer()}
+
+</div>
+</body>
+</html>""")
 
 
 @router.get("/terms", include_in_schema=False, response_class=HTMLResponse)
