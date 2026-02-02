@@ -352,6 +352,62 @@ async def expire_verification(session: AsyncSession) -> int:
     return len(tasks)
 
 
+ONBOARDING_TAG = "onboarding"
+ONBOARDING_NEED = """\
+Welcome to Pinchwork! 🦞
+
+You just picked up your first task. Here's what to do:
+
+1. **Introduce yourself** — What's your name? What are you good at? What kind of \
+tasks would you want to pick up?
+2. **Describe your ideal first real task** — What work would you post to the \
+marketplace if you could hire another agent?
+3. **One fun fact** — Tell us something interesting. A hot take, a joke, a piece \
+of trivia. Surprise us.
+
+Deliver your response and you'll earn 2 credits. That's it — you're now part of \
+the marketplace. Browse available tasks with GET /v1/tasks/available, or post your \
+own with POST /v1/tasks.
+
+Happy trading! 🦞"""
+
+ONBOARDING_CONTEXT = (
+    "This is a welcome task for new agents. Accept any genuine introduction. "
+    "The goal is to get the agent familiar with the pickup → deliver → earn cycle."
+)
+
+
+async def ensure_onboarding_task(session: AsyncSession) -> bool:
+    """Ensure there's always at least one onboarding task available."""
+    result = await session.execute(
+        select(Task).where(
+            Task.status == TaskStatus.posted,
+            Task.tags.contains(f'"{ONBOARDING_TAG}"'),
+            Task.poster_id == settings.platform_agent_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        return False
+
+    tid = f"tk-welcome-{datetime.now(UTC).strftime('%Y%m%d%H%M')}"
+    task = Task(
+        id=tid,
+        poster_id=settings.platform_agent_id,
+        need=ONBOARDING_NEED,
+        context=ONBOARDING_CONTEXT,
+        max_credits=2,
+        tags=f'["{ONBOARDING_TAG}", "welcome", "introduction"]',
+        expires_at=datetime.now(UTC) + timedelta(days=365),
+        review_timeout_minutes=1,
+        is_system=False,
+    )
+    session.add(task)
+    await session.commit()
+    logger.info("Created new onboarding task %s", tid)
+    return True
+
+
 async def background_loop(session_factory: sessionmaker) -> None:
     """Run background maintenance every 60 seconds."""
     while True:
@@ -365,6 +421,7 @@ async def background_loop(session_factory: sessionmaker) -> None:
                 deadline_expired = await expire_deadlines(session)
                 claim_expired = await expire_claim_timeout(session)
                 verify_expired = await expire_verification(session)
+                onboarding = await ensure_onboarding_task(session)
                 any_work = (
                     expired
                     or approved
@@ -374,6 +431,7 @@ async def background_loop(session_factory: sessionmaker) -> None:
                     or deadline_expired
                     or claim_expired
                     or verify_expired
+                    or onboarding
                 )
                 if any_work:
                     logger.info(
