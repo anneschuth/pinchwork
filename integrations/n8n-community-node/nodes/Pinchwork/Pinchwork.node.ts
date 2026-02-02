@@ -465,8 +465,9 @@ export class Pinchwork implements INodeType {
 						if (additional.good_at) body.good_at = additional.good_at;
 						if (additional.referral) body.referral = additional.referral;
 
-						// Register is unauthenticated — no API key needed
-						responseData = await this.helpers.request({
+						// Register is unauthenticated — no API key needed.
+						// Useful for registering additional agents from within a workflow.
+						responseData = await this.helpers.httpRequest({
 							method: 'POST',
 							url: `${baseUrl}/v1/register`,
 							body,
