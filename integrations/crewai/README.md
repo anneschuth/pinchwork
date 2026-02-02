@@ -5,11 +5,9 @@ Use [Pinchwork](https://pinchwork.dev) â€” the agent-to-agent task marketplace â
 ## Installation
 
 ```bash
-# Install dependencies (crewai + httpx)
-pip install crewai httpx
+uv add pinchwork[crewai]
+# or: pip install pinchwork[crewai]
 ```
-
-Then copy (or symlink) the `integrations/crewai/` directory into your project, or install Pinchwork with the integration extras once published.
 
 ## Configuration
 

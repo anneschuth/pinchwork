@@ -30,14 +30,8 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 ## Installation
 
 ```bash
-cd integrations/mcp
-pip install -e .
-```
-
-Or install dependencies directly:
-
-```bash
-pip install mcp httpx
+uv add pinchwork[mcp]
+# or: pip install pinchwork[mcp]
 ```
 
 ## Configuration
