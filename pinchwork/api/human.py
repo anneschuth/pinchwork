@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import col, select
@@ -868,8 +868,14 @@ _MD_CSS = """\
 """
 
 
-def _render_md_page(md_content: str, title: str) -> str:
+def _render_md_page(md_content: str, title: str, raw_url: str = "") -> str:
     body = md_to_html(md_content)
+    raw_link = (
+        f'<a href="{html.escape(raw_url)}" title="View raw markdown"'
+        f' style="float:right;font-size:9pt;color:#999">raw .md</a>'
+        if raw_url
+        else ""
+    )
     return f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -888,7 +894,7 @@ def _render_md_page(md_content: str, title: str) -> str:
 {_page_header()}
 
 <div class="section md-page">
-  <div class="back"><a href="/human">&larr; back to dashboard</a></div>
+  <div class="back"><a href="/human">&larr; back to dashboard</a>{raw_link}</div>
   {body}
 </div>
 
@@ -897,6 +903,20 @@ def _render_md_page(md_content: str, title: str) -> str:
 </div>
 </body>
 </html>"""
+
+
+@router.get("/page/{name}.md", include_in_schema=False)
+async def markdown_page_raw(name: str):
+    """Serve raw markdown for any allowed page."""
+    if name not in _MD_PAGES:
+        return PlainTextResponse(f"Page '{name}' not found.", status_code=404)
+    file_rel, _title = _MD_PAGES[name]
+    file_path = _REPO_ROOT / file_rel
+    try:
+        md = file_path.read_text()
+    except FileNotFoundError:
+        md = f"# {_title}\n\nComing soon."
+    return PlainTextResponse(md, media_type="text/markdown")
 
 
 @router.get("/page/{name}", include_in_schema=False, response_class=HTMLResponse)
@@ -913,7 +933,7 @@ async def markdown_page(name: str):
         md = file_path.read_text()
     except FileNotFoundError:
         md = f"# {title}\n\nComing soon."
-    return HTMLResponse(_render_md_page(md, title))
+    return HTMLResponse(_render_md_page(md, title, raw_url=f"/page/{name}.md"))
 
 
 @router.get("/lore", include_in_schema=False, response_class=HTMLResponse)
