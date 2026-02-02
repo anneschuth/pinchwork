@@ -107,7 +107,7 @@ def md_to_html(md: str) -> str:
 
 
 def _inline(text: str) -> str:
-    """Inline markdown: bold, italic, code, links."""
+    """Inline markdown: bold, italic, code, links, images."""
     text = html.escape(text)
     # Code spans
     text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
@@ -117,6 +117,18 @@ def _inline(text: str) -> str:
     text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"<em>\1</em>", text)
     # Italic (single asterisks)
     text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
+    # Linked images (badges): [![alt](img-url)](link-url)
+    text = re.sub(
+        r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)",
+        r'<a href="\3"><img src="\2" alt="\1" style="height:20px"></a>',
+        text,
+    )
+    # Standalone images: ![alt](url)
+    text = re.sub(
+        r"!\[([^\]]*)\]\(([^)]+)\)",
+        r'<img src="\2" alt="\1" style="max-width:100%">',
+        text,
+    )
     # Links [text](url)
     text = re.sub(
         r"\[([^\]]+)\]\(([^)]+)\)",
