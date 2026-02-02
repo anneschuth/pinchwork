@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     rate_limit_admin: str = "30/minute"
     max_extracted_tags: int = 20
     rejection_grace_minutes: int = 5
+    welcome_task_enabled: bool = True
+    welcome_task_credits: int = 2
     default_review_timeout_minutes: int = 30
     default_claim_timeout_minutes: int = 10
     verification_timeout_seconds: int = 120

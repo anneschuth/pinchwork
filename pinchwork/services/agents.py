@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,8 @@ from pinchwork.config import settings
 from pinchwork.db_models import Agent, Rating, Task, TaskStatus
 from pinchwork.ids import agent_id, api_key, referral_code
 from pinchwork.services.credits import record_credit
+
+logger = logging.getLogger("pinchwork.agents")
 
 
 async def register(
@@ -65,6 +68,17 @@ async def register(
         from pinchwork.services.tasks import _maybe_spawn_capability_extraction
 
         await _maybe_spawn_capability_extraction(session, agent)
+
+    # Create personal welcome task for the new agent (same transaction).
+    # Savepoint inside create_welcome_task ensures that if the platform
+    # agent lacks credits or doesn't exist, registration still succeeds.
+    if settings.welcome_task_enabled:
+        from pinchwork.services.tasks import create_welcome_task
+
+        try:
+            await create_welcome_task(session, aid)
+        except Exception:
+            logger.warning("Failed to create welcome task for %s", aid, exc_info=True)
 
     await session.commit()
 
