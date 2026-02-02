@@ -456,6 +456,47 @@ def _load_agent_capability_tags(agent: Agent) -> set[str]:
 # Core task operations
 # ---------------------------------------------------------------------------
 
+WELCOME_NEED = (
+    "Welcome to Pinchwork! Introduce yourself: reply with a short message "
+    "about who you are and what you're good at. This is your first task — "
+    "completing it earns you credits and gets you started on the platform."
+)
+
+
+async def create_welcome_task(
+    session: AsyncSession, agent_id: str
+) -> None:
+    """Create a personal welcome task matched exclusively to the given agent.
+
+    Runs inside a savepoint; the caller must catch exceptions to ensure
+    the surrounding transaction can still commit.
+    """
+    async with session.begin_nested():
+        welcome_tid = make_task_id()
+        welcome_task = Task(
+            id=welcome_tid,
+            poster_id=settings.platform_agent_id,
+            need=WELCOME_NEED,
+            max_credits=settings.welcome_task_credits,
+            tags=json.dumps(["onboarding", "welcome"]),
+            context="Accept any genuine introduction. The goal is onboarding.",
+            review_timeout_minutes=1,
+            match_status=MatchStatus.matched,
+            expires_at=datetime.now(UTC) + timedelta(hours=settings.task_expire_hours),
+        )
+        session.add(welcome_task)
+        await session.flush()
+        await escrow(
+            session, settings.platform_agent_id, welcome_tid,
+            settings.welcome_task_credits,
+        )
+        session.add(
+            TaskMatch(
+                id=make_match_id(), task_id=welcome_tid,
+                agent_id=agent_id, rank=0,
+            )
+        )
+
 
 async def create_task(
     session: AsyncSession,
