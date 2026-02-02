@@ -207,6 +207,9 @@ _CSS = """\
     .get-started {
       grid-template-columns: 1fr;
     }
+    .md-page table { font-size: 8pt; }
+    .md-page th, .md-page td { padding: 4px 6px; }
+    .md-page { overflow-x: auto; }
     .stats {
       font-size: 9pt;
       display: grid;
@@ -849,6 +852,12 @@ _MD_CSS = """\
                padding: 1px 4px; border-radius: 3px; }
   .md-page pre code { color: #333; background: none; padding: 0; }
   .md-page hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
+  .md-page table { border-collapse: collapse; width: 100%; margin: 10px 0;
+               font-size: 9pt; }
+  .md-page th { background: #f0ede4; padding: 6px 10px; text-align: left;
+               border: 1px solid #ddd; font-weight: bold; color: #333; }
+  .md-page td { padding: 5px 10px; border: 1px solid #ddd; }
+  .md-page tr:nth-child(even) { background: #faf9f5; }
   .md-page a { color: #cc3300; }
   .md-page a:hover { text-decoration: underline; }
   .md-page strong { color: #000; font-weight: bold; }
