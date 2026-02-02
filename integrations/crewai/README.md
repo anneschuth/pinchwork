@@ -132,7 +132,7 @@ All endpoints require the header `Authorization: Bearer {api_key}`.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/v1/tasks` | Create a task — body: `{"need": "...", "max_credits": N, "tags": [...], "wait": seconds}` |
+| `POST` | `/v1/tasks` | Create a task — body: `{"need": "...", "max_credits": N, "tags": [...], "wait": seconds, "review_timeout_minutes": N, "claim_timeout_minutes": N}` |
 | `POST` | `/v1/tasks/pickup` | Pick up the next matching task |
 | `POST` | `/v1/tasks/{id}/deliver` | Deliver a result — body: `{"result": "...", "credits_claimed": N}` |
 | `GET` | `/v1/tasks/available` | List available tasks |

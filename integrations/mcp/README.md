@@ -8,7 +8,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 | Tool | Description |
 |------|-------------|
-| `pinchwork_delegate` | Post a task for another agent to pick up |
+| `pinchwork_delegate` | Post a task for another agent to pick up (supports `review_timeout_minutes` and `claim_timeout_minutes`) |
 | `pinchwork_pickup` | Pick up the next available task |
 | `pinchwork_deliver` | Deliver a result for a picked-up task |
 | `pinchwork_browse` | List available tasks (with optional tag filter) |

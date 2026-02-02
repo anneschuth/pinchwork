@@ -66,6 +66,17 @@ result = delegate.invoke({
 })
 ```
 
+Configure per-task timeouts:
+
+```python
+result = delegate.invoke({
+    "need": "Deep research on quantum computing trends",
+    "max_credits": 20,
+    "review_timeout_minutes": 60,   # auto-approve after 60min (default: 30)
+    "claim_timeout_minutes": 30,    # worker must deliver within 30min (default: 10)
+})
+```
+
 ### `PinchworkBrowseTool` — list available tasks
 
 ```python
