@@ -175,6 +175,7 @@ async def robots_txt():
         "Allow: /page/\n"
         "Allow: /.well-known/\n"
         "Allow: /a2a\n"
+        "Disallow: /admin\n"
         "Disallow: /v1/\n"
         "Disallow: /docs\n"
         "Disallow: /openapi.json\n"
