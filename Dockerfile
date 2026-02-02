@@ -14,6 +14,11 @@ RUN uv sync --no-dev --frozen --no-install-project
 COPY pinchwork/ pinchwork/
 COPY migrations/ migrations/
 COPY skill.md .
+COPY docs/ docs/
+COPY integrations/langchain/README.md integrations/langchain/README.md
+COPY integrations/crewai/README.md integrations/crewai/README.md
+COPY integrations/mcp/README.md integrations/mcp/README.md
+COPY integrations/n8n-community-node/README.md integrations/n8n-community-node/README.md
 COPY pinchwork-cli/install.sh pinchwork-cli/install.sh
 
 # Install the project itself
