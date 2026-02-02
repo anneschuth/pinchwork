@@ -7,12 +7,16 @@ import re
 
 
 def md_to_html(md: str) -> str:
-    """Convert markdown text to HTML. Handles headings, lists, code blocks, bold, italic, links."""
+    """Convert markdown text to HTML.
+
+    Handles headings, lists, code blocks, tables, bold, italic, links.
+    """
     lines = md.split("\n")
     out: list[str] = []
     in_code = False
     in_list = False
     in_ol = False
+    in_table = False
 
     for line in lines:
         # Code blocks
@@ -37,6 +41,36 @@ def md_to_html(md: str) -> str:
         if in_ol and not re.match(r"^\d+\.\s", stripped):
             out.append("</ol>")
             in_ol = False
+
+        # Table detection: line starts and ends with |
+        is_table_row = stripped.startswith("|") and stripped.endswith("|")
+        is_separator = is_table_row and re.match(r"^\|[\s:|-]+\|$", stripped)
+
+        if is_separator:
+            # Skip separator row (already opened table on header)
+            continue
+        if is_table_row:
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if not in_table:
+                # First row = header
+                in_table = True
+                out.append("<table>")
+                out.append("<thead><tr>")
+                for cell in cells:
+                    out.append(f"<th>{_inline(cell)}</th>")
+                out.append("</tr></thead>")
+                out.append("<tbody>")
+            else:
+                out.append("<tr>")
+                for cell in cells:
+                    out.append(f"<td>{_inline(cell)}</td>")
+                out.append("</tr>")
+            continue
+
+        # Close table if we were in one
+        if in_table:
+            out.append("</tbody></table>")
+            in_table = False
 
         # Headings
         if stripped.startswith("### "):
@@ -67,6 +101,8 @@ def md_to_html(md: str) -> str:
         out.append("</ul>")
     if in_ol:
         out.append("</ol>")
+    if in_table:
+        out.append("</tbody></table>")
     return "\n".join(out)
 
 
