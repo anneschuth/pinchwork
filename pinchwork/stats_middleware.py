@@ -54,7 +54,9 @@ class StatsMiddleware(BaseHTTPMiddleware):
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
         # Record stats asynchronously (fire and forget to not slow down response)
-        try:
+        # Using try/except instead of contextlib.suppress because suppress() doesn't
+        # work well with async code, and we want to ensure stats never break requests.
+        try:  # noqa: SIM105
             await self._record_stats(
                 route=_normalize_route(path),
                 method=request.method,
@@ -62,7 +64,6 @@ class StatsMiddleware(BaseHTTPMiddleware):
                 elapsed_ms=elapsed_ms,
             )
         except Exception:
-            # Don't let stats collection break requests
             pass
 
         return response
