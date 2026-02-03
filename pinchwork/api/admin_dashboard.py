@@ -2,19 +2,20 @@
 
 Security: requires PINCHWORK_ADMIN_KEY. Uses a signed cookie for
 browser sessions so you don't re-enter the key on every page load.
+
+Note: Date grouping uses SQLite-specific strftime(). For PostgreSQL
+support, these would need to be replaced with date_trunc() or to_char().
+See admin_helpers.sql_date_hour() and sql_date_day().
 """
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import html
 import json
 import secrets
-import time
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,408 +34,24 @@ from pinchwork.db_models import (
 )
 from pinchwork.rate_limit import limiter
 
+from .admin_helpers import (
+    COOKIE_NAME,
+    AdminAuth,
+    admin_page,
+    cookie_signature,
+    csrf_token,
+    make_cookie,
+    relative_time,
+    sql_date_day,
+    sql_date_hour,
+    status_class,
+    svg_bar_chart,
+    verify_cookie,
+    verify_csrf,
+)
+from .admin_styles import ADMIN_CSS
+
 router = APIRouter()
-
-# ---------------------------------------------------------------------------
-# Auth helpers
-# ---------------------------------------------------------------------------
-
-_COOKIE_NAME = "pw_admin"
-_COOKIE_MAX_AGE = 86400  # 24 hours
-
-
-def _cookie_signature(payload: str) -> str:
-    """HMAC-sign a cookie payload using the admin key."""
-    key = (settings.admin_key or "").encode()
-    return hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()[:32]
-
-
-def _make_cookie(resp: Response, request: Request | None = None) -> Response:
-    """Set a signed admin session cookie."""
-    ts = str(int(time.time()))
-    sig = _cookie_signature(ts)
-    # Set secure=True for HTTPS, but allow HTTP for local dev/testing
-    is_secure = True
-    if request:
-        host = request.headers.get("host", "")
-        scheme = request.url.scheme
-        if scheme == "http" or host.startswith("localhost") or host.startswith("127."):
-            is_secure = False
-    resp.set_cookie(
-        _COOKIE_NAME,
-        f"{ts}.{sig}",
-        max_age=_COOKIE_MAX_AGE,
-        httponly=True,
-        secure=is_secure,
-        samesite="strict",
-    )
-    return resp
-
-
-def _verify_cookie(request: Request) -> bool:
-    """Verify the admin session cookie is valid and not expired."""
-    cookie = request.cookies.get(_COOKIE_NAME, "")
-    if "." not in cookie:
-        return False
-    ts_str, sig = cookie.rsplit(".", 1)
-    try:
-        ts = int(ts_str)
-    except ValueError:
-        return False
-    if time.time() - ts > _COOKIE_MAX_AGE:
-        return False
-    expected = _cookie_signature(ts_str)
-    return hmac.compare_digest(sig, expected)
-
-
-async def _require_admin(request: Request) -> None:
-    """Check admin access via cookie. Redirect to login if not."""
-    if not settings.admin_key:
-        raise HTTPException(501, "Admin dashboard not configured (set PINCHWORK_ADMIN_KEY)")
-    if not _verify_cookie(request):
-        raise HTTPException(status_code=403, detail="Not authenticated")
-
-
-AdminAuth = Depends(_require_admin)
-
-
-# ---------------------------------------------------------------------------
-# Shared CSS / HTML
-# ---------------------------------------------------------------------------
-
-_ADMIN_CSS = """\
-  body {
-    font-family: Verdana, Geneva, sans-serif;
-    font-size: 10pt;
-    background: #1a1a2e;
-    color: #e0e0e0;
-    margin: 0;
-    padding: 0;
-  }
-  .container {
-    max-width: 960px;
-    margin: 0 auto;
-    background: #16213e;
-  }
-  .header {
-    background: #0f3460;
-    color: #e94560;
-    padding: 8px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .header .title {
-    font-weight: bold;
-    font-size: 12pt;
-    letter-spacing: 1px;
-    color: #e94560;
-  }
-  .header a {
-    color: #a0c4ff;
-    text-decoration: none;
-    font-size: 9pt;
-    margin-left: 10px;
-  }
-  .header a:hover { text-decoration: underline; }
-  .section {
-    padding: 14px 18px;
-    border-bottom: 1px solid #1a1a3e;
-  }
-  .section h2 {
-    font-size: 10pt;
-    color: #e94560;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 0 0 10px 0;
-  }
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .stat-card {
-    background: #1a1a3e;
-    border-radius: 6px;
-    padding: 12px;
-    text-align: center;
-  }
-  .stat-card .number {
-    font-size: 20pt;
-    font-weight: bold;
-    color: #e94560;
-  }
-  .stat-card .label {
-    font-size: 8pt;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 4px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9pt;
-  }
-  th {
-    text-align: left;
-    border-bottom: 1px solid #333;
-    padding: 6px 8px;
-    font-size: 8pt;
-    text-transform: uppercase;
-    color: #888;
-  }
-  td {
-    padding: 6px 8px;
-    border-bottom: 1px solid #222;
-    vertical-align: top;
-  }
-  tr:hover { background: #1a1a3e; }
-  .mono { font-family: monospace; font-size: 8pt; }
-  .right { text-align: right; }
-  .muted { color: #666; font-size: 8pt; }
-  a { color: #a0c4ff; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .tag {
-    display: inline-block;
-    background: #2a2a4e;
-    color: #a0c4ff;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-size: 8pt;
-    margin-right: 4px;
-  }
-  .badge-infra {
-    background: #1a3a5e;
-    color: #4da6ff;
-  }
-  .badge-suspended {
-    background: #5e1a1a;
-    color: #ff4d4d;
-  }
-  .chart-container {
-    background: #1a1a3e;
-    border-radius: 6px;
-    padding: 12px;
-    margin-bottom: 14px;
-  }
-  .chart-title {
-    font-size: 9pt;
-    color: #999;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .detail-row {
-    margin-bottom: 10px;
-  }
-  .detail-label {
-    font-size: 8pt;
-    text-transform: uppercase;
-    color: #888;
-    letter-spacing: 0.5px;
-  }
-  .detail-value {
-    margin-top: 2px;
-    line-height: 1.5;
-  }
-  .need-full {
-    white-space: pre-wrap;
-    word-break: break-word;
-    background: #1a1a3e;
-    padding: 10px;
-    border-radius: 4px;
-    font-size: 9pt;
-    line-height: 1.6;
-  }
-  .pagination {
-    display: flex;
-    gap: 8px;
-    margin-top: 14px;
-    font-size: 9pt;
-  }
-  .pagination a, .pagination span {
-    padding: 4px 10px;
-    border-radius: 3px;
-  }
-  .pagination .current {
-    background: #e94560;
-    color: #fff;
-  }
-  .login-box {
-    max-width: 360px;
-    margin: 80px auto;
-    background: #16213e;
-    padding: 30px;
-    border-radius: 8px;
-  }
-  .login-box h2 {
-    color: #e94560;
-    margin: 0 0 16px 0;
-  }
-  .login-box input {
-    width: 100%;
-    padding: 8px;
-    margin-bottom: 12px;
-    background: #1a1a3e;
-    border: 1px solid #333;
-    color: #e0e0e0;
-    border-radius: 4px;
-    font-size: 10pt;
-    box-sizing: border-box;
-  }
-  .login-box button {
-    width: 100%;
-    padding: 10px;
-    background: #e94560;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 10pt;
-    cursor: pointer;
-  }
-  .login-box button:hover { background: #c43050; }
-  .login-error {
-    color: #ff4d4d;
-    font-size: 9pt;
-    margin-bottom: 10px;
-  }
-  .status-posted { color: #4da6ff; }
-  .status-claimed { color: #ff9f43; }
-  .status-delivered { color: #a855f7; }
-  .status-approved { color: #22c55e; }
-  .status-expired, .status-cancelled { color: #666; }
-  @media (max-width: 600px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    td:nth-child(n+5) { display: none; }
-    th:nth-child(n+5) { display: none; }
-  }
-"""
-
-
-def _admin_header() -> str:
-    return """\
-<div class="header">
-  <span class="title">🦞 PINCHWORK ADMIN</span>
-  <span>
-    <a href="/admin">overview</a>
-    <a href="/admin/tasks">tasks</a>
-    <a href="/admin/agents">agents</a>
-    <a href="/admin/referrals">referrals</a>
-    <a href="/admin/stats">stats</a>
-    <a href="/human">public</a>
-    <a href="/admin/logout">logout</a>
-  </span>
-</div>"""
-
-
-def _admin_page(title: str, body: str) -> str:
-    return f"""\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>{html.escape(title)} — Pinchwork Admin</title>
-<link rel="icon" href="/favicon.ico" type="image/svg+xml">
-<style>{_ADMIN_CSS}</style>
-</head>
-<body>
-<div class="container">
-{_admin_header()}
-{body}
-</div>
-</body>
-</html>"""
-
-
-def _relative_time(dt: datetime) -> str:
-    now = datetime.now(UTC)
-    delta = now.replace(tzinfo=None) - dt if dt.tzinfo is None else now - dt
-    seconds = int(delta.total_seconds())
-    if seconds < 0:
-        return "just now"
-    if seconds < 60:
-        return f"{seconds}s ago"
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes}m ago"
-    hours = minutes // 60
-    if hours < 24:
-        return f"{hours}h ago"
-    days = hours // 24
-    return f"{days}d ago"
-
-
-_VALID_STATUSES = {"posted", "claimed", "delivered", "approved", "expired", "cancelled"}
-
-
-def _status_class(status: str) -> str:
-    if status in _VALID_STATUSES:
-        return f"status-{status}"
-    return "status-unknown"
-
-
-# ---------------------------------------------------------------------------
-# SVG chart helpers (no JS dependencies)
-# ---------------------------------------------------------------------------
-
-
-def _svg_bar_chart(
-    data: list[tuple[str, int]],
-    width: int = 700,
-    height: int = 160,
-    color: str = "#e94560",
-) -> str:
-    """Render a simple SVG bar chart. data = [(label, value), ...]."""
-    if not data:
-        return '<span class="muted">No data yet</span>'
-    max_val = max(v for _, v in data) or 1
-    n = len(data)
-    bar_w = max(2, (width - 40) // n - 1)
-    chart_h = height - 30
-
-    bars = []
-    for i, (label, val) in enumerate(data):
-        x = 30 + i * (bar_w + 1)
-        h = int(val / max_val * chart_h) if max_val else 0
-        y = chart_h - h + 10
-        bars.append(
-            f'<rect x="{x}" y="{y}" width="{bar_w}" height="{h}" '
-            f'fill="{color}" opacity="0.85">'
-            f"<title>{html.escape(label)}: {val}</title></rect>"
-        )
-
-    # Y-axis labels
-    y_labels = ""
-    for frac in (0, 0.5, 1.0):
-        val = int(max_val * (1 - frac))
-        y = int(10 + chart_h * frac)
-        y_labels += (
-            f'<text x="26" y="{y + 3}" text-anchor="end" '
-            f'fill="#666" font-size="7">{val}</text>'
-            f'<line x1="28" y1="{y}" x2="{width}" y2="{y}" '
-            f'stroke="#333" stroke-dasharray="2,3"/>'
-        )
-
-    # X-axis labels (every Nth)
-    x_labels = ""
-    step = max(1, n // 8)
-    for i in range(0, n, step):
-        label, _ = data[i]
-        x = 30 + i * (bar_w + 1) + bar_w // 2
-        x_labels += (
-            f'<text x="{x}" y="{height - 2}" text-anchor="middle" '
-            f'fill="#666" font-size="7">{html.escape(label)}</text>'
-        )
-
-    return (
-        f'<svg viewBox="0 0 {width} {height}" '
-        f'style="width:100%;max-width:{width}px;height:auto">'
-        f"{y_labels}{''.join(bars)}{x_labels}</svg>"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -442,29 +59,12 @@ def _svg_bar_chart(
 # ---------------------------------------------------------------------------
 
 
-def _csrf_token() -> str:
-    """Generate a CSRF token tied to the admin key and current hour."""
-    hour = str(int(time.time()) // 3600)
-    key = (settings.admin_key or "").encode()
-    return hmac.new(key, f"csrf-{hour}".encode(), hashlib.sha256).hexdigest()[:32]
-
-
-def _verify_csrf(token: str) -> bool:
-    """Verify CSRF token (accept current hour and previous hour)."""
-    current = _csrf_token()
-    # Also accept previous hour to handle boundary
-    prev_hour = str(int(time.time()) // 3600 - 1)
-    key = (settings.admin_key or "").encode()
-    previous = hmac.new(key, f"csrf-{prev_hour}".encode(), hashlib.sha256).hexdigest()[:32]
-    return hmac.compare_digest(token, current) or hmac.compare_digest(token, previous)
-
-
 @router.get("/admin/login", include_in_schema=False, response_class=HTMLResponse)
 async def admin_login_page(error: str = ""):
     if not settings.admin_key:
         return HTMLResponse("Admin not configured (set PINCHWORK_ADMIN_KEY)", status_code=501)
     error_html = f'<div class="login-error">{html.escape(error)}</div>' if error else ""
-    csrf = _csrf_token()
+    csrf = csrf_token()
     return HTMLResponse(f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -474,7 +74,7 @@ async def admin_login_page(error: str = ""):
 <meta name="robots" content="noindex, nofollow">
 <title>Admin Login — Pinchwork</title>
 <link rel="icon" href="/favicon.ico" type="image/svg+xml">
-<style>{_ADMIN_CSS}</style>
+<style>{ADMIN_CSS}</style>
 </head>
 <body>
 <div class="login-box">
@@ -497,19 +97,19 @@ async def admin_login_submit(request: Request):
         return HTMLResponse("Admin not configured", status_code=501)
     form = await request.form()
     csrf = str(form.get("csrf", ""))
-    if not _verify_csrf(csrf):
+    if not verify_csrf(csrf):
         return RedirectResponse("/admin/login?error=Invalid+request", status_code=303)
     key = form.get("key", "")
     if not secrets.compare_digest(str(key), settings.admin_key):
         return RedirectResponse("/admin/login?error=Invalid+admin+key", status_code=303)
     resp = RedirectResponse("/admin", status_code=303)
-    return _make_cookie(resp, request)
+    return make_cookie(resp, request)
 
 
 @router.get("/admin/logout", include_in_schema=False)
 async def admin_logout():
     resp = RedirectResponse("/admin/login", status_code=303)
-    resp.delete_cookie(_COOKIE_NAME)
+    resp.delete_cookie(COOKIE_NAME)
     return resp
 
 
@@ -588,7 +188,7 @@ async def admin_overview(
     tasks_per_hour_raw = (
         await session.execute(
             text(
-                "SELECT strftime('%Y-%m-%d %H', created_at) as hour, COUNT(*) "
+                f"SELECT {sql_date_hour('created_at')} as hour, COUNT(*) "
                 "FROM tasks WHERE created_at >= :cutoff "
                 "GROUP BY hour ORDER BY hour"
             ),
@@ -602,7 +202,7 @@ async def admin_overview(
     agents_per_day_raw = (
         await session.execute(
             text(
-                "SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) "
+                f"SELECT {sql_date_day('created_at')} as day, COUNT(*) "
                 "FROM agents WHERE created_at >= :cutoff "
                 "AND id != :platform "
                 "GROUP BY day ORDER BY day"
@@ -616,7 +216,7 @@ async def admin_overview(
     credits_per_day_raw = (
         await session.execute(
             text(
-                "SELECT strftime('%Y-%m-%d', created_at) as day, "
+                f"SELECT {sql_date_day('created_at')} as day, "
                 "SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) "
                 "FROM credit_ledger WHERE created_at >= :cutoff "
                 "GROUP BY day ORDER BY day"
@@ -630,7 +230,7 @@ async def admin_overview(
     completions_per_hour_raw = (
         await session.execute(
             text(
-                "SELECT strftime('%Y-%m-%d %H', delivered_at) as hour, COUNT(*) "
+                f"SELECT {sql_date_hour('delivered_at')} as hour, COUNT(*) "
                 "FROM tasks WHERE status = 'approved' AND delivered_at >= :cutoff "
                 "GROUP BY hour ORDER BY hour"
             ),
@@ -649,14 +249,14 @@ async def admin_overview(
     for (task,) in recent_tasks:
         need = html.escape((task.need or "")[:60])
         status = task.status.value if hasattr(task.status, "value") else task.status
-        ago = _relative_time(task.created_at)
+        ago = relative_time(task.created_at)
         sys_badge = ' <span class="tag">sys</span>' if task.is_system else ""
         recent_rows += (
             f"<tr>"
             f'<td class="mono"><a href="/admin/tasks/{html.escape(task.id)}">'
             f"{html.escape(task.id[:16])}</a></td>"
             f"<td>{need}{sys_badge}</td>"
-            f'<td class="{_status_class(status)}">{status}</td>'
+            f'<td class="{status_class(status)}">{status}</td>'
             f'<td class="right">{task.max_credits}</td>'
             f'<td class="muted">{ago}</td>'
             f"</tr>"
@@ -713,11 +313,11 @@ async def admin_overview(
   <h2>Activity (Last 48h)</h2>
   <div class="chart-container">
     <div class="chart-title">Tasks Created per Hour</div>
-    {_svg_bar_chart(tasks_per_hour, color="#4da6ff")}
+    {svg_bar_chart(tasks_per_hour, color="#4da6ff")}
   </div>
   <div class="chart-container">
     <div class="chart-title">Tasks Completed per Hour</div>
-    {_svg_bar_chart(completions_per_hour, color="#22c55e")}
+    {svg_bar_chart(completions_per_hour, color="#22c55e")}
   </div>
 </div>
 
@@ -725,11 +325,11 @@ async def admin_overview(
   <h2>Growth (Last 30d)</h2>
   <div class="chart-container">
     <div class="chart-title">Agent Registrations per Day</div>
-    {_svg_bar_chart(agents_per_day, color="#a855f7")}
+    {svg_bar_chart(agents_per_day, color="#a855f7")}
   </div>
   <div class="chart-container">
     <div class="chart-title">Credits Moved per Day</div>
-    {_svg_bar_chart(credits_per_day, color="#ff9f43")}
+    {svg_bar_chart(credits_per_day, color="#ff9f43")}
   </div>
 </div>
 
@@ -748,7 +348,7 @@ async def admin_overview(
   <div style="margin-top:10px"><a href="/admin/tasks">View all tasks →</a></div>
 </div>"""
 
-    return HTMLResponse(_admin_page("Overview", body))
+    return HTMLResponse(admin_page("Overview", body))
 
 
 # ---------------------------------------------------------------------------
@@ -793,7 +393,7 @@ async def admin_tasks(
     for (task,) in tasks:
         need = html.escape((task.need or "")[:70])
         st = task.status.value if hasattr(task.status, "value") else task.status
-        ago = _relative_time(task.created_at)
+        ago = relative_time(task.created_at)
         poster = html.escape(task.poster_id[:16])
         worker = html.escape((task.worker_id or "—")[:16])
         sys_badge = ' <span class="tag">sys</span>' if task.is_system else ""
@@ -802,7 +402,7 @@ async def admin_tasks(
             f'<td class="mono"><a href="/admin/tasks/{html.escape(task.id)}">'
             f"{html.escape(task.id[:16])}</a></td>"
             f"<td>{need}{sys_badge}</td>"
-            f'<td class="{_status_class(st)}">{st}</td>'
+            f'<td class="{status_class(st)}">{st}</td>'
             f'<td class="right">{task.max_credits}</td>'
             f'<td class="mono">{poster}</td>'
             f'<td class="mono">{worker}</td>'
@@ -831,13 +431,19 @@ async def admin_tasks(
         filter_html += f' <a href="/admin/tasks{qs}"{active}>{sl}</a>'
     filter_html += "</div>"
 
-    # Pagination
+    # Pagination - preserve filters
+    filter_qs = ""
+    if current_status:
+        filter_qs += f"&status={current_status}"
+    if current_system:
+        filter_qs += f"&system={current_system}"
+
     pag = '<div class="pagination">'
     if page > 1:
-        pag += f'<a href="/admin/tasks?page={page - 1}">← prev</a>'
+        pag += f'<a href="/admin/tasks?page={page - 1}{filter_qs}">← prev</a>'
     pag += f'<span class="current">{page} / {total_pages}</span>'
     if page < total_pages:
-        pag += f'<a href="/admin/tasks?page={page + 1}">next →</a>'
+        pag += f'<a href="/admin/tasks?page={page + 1}{filter_qs}">next →</a>'
     pag += f' <span class="muted">({total} total)</span></div>'
 
     body = f"""\
@@ -859,7 +465,7 @@ async def admin_tasks(
   {pag}
 </div>"""
 
-    return HTMLResponse(_admin_page("Tasks", body))
+    return HTMLResponse(admin_page("Tasks", body))
 
 
 # ---------------------------------------------------------------------------
@@ -878,7 +484,7 @@ async def admin_task_detail(
     row = result.first()
     if not row:
         return HTMLResponse(
-            _admin_page("Not Found", '<div class="section">Task not found.</div>'),
+            admin_page("Not Found", '<div class="section">Task not found.</div>'),
             status_code=404,
         )
 
@@ -915,7 +521,7 @@ async def admin_task_detail(
         msgs_html += (
             f'<div style="margin-bottom:8px">'
             f'<span class="mono">{html.escape(msg.sender_id[:16])}</span> '
-            f'<span class="muted">{_relative_time(msg.created_at)}</span>'
+            f'<span class="muted">{relative_time(msg.created_at)}</span>'
             f'<div style="margin-top:2px">{html.escape(msg.message)}</div>'
             f"</div>"
         )
@@ -935,7 +541,7 @@ async def admin_task_detail(
         qs_html += (
             f'<div style="margin-bottom:8px">'
             f'<span class="mono">{html.escape(q.asker_id[:16])}</span> '
-            f'<span class="muted">{_relative_time(q.created_at)}</span>'
+            f'<span class="muted">{relative_time(q.created_at)}</span>'
             f"<div><b>Q:</b> {html.escape(q.question)}</div>"
             f"<div><b>A:</b> {answer}</div>"
             f"</div>"
@@ -981,7 +587,7 @@ async def admin_task_detail(
   </div>
   <div class="detail-row">
     <div class="detail-label">Status</div>
-    <div class="detail-value"><span class="{_status_class(status)}">{status}</span></div>
+    <div class="detail-value"><span class="{status_class(status)}">{status}</span></div>
   </div>
   <div class="detail-row">
     <div class="detail-label">Credits</div>
@@ -1019,7 +625,7 @@ async def admin_task_detail(
   <div class="detail-row">
     <div class="detail-label">Created</div>
     <div class="detail-value">{task.created_at.isoformat() if task.created_at else "—"}
-      ({_relative_time(task.created_at) if task.created_at else ""})</div>
+      ({relative_time(task.created_at) if task.created_at else ""})</div>
   </div>
   <div class="detail-row">
     <div class="detail-label">Claimed</div>
@@ -1056,7 +662,7 @@ async def admin_task_detail(
   </div>
 </div>"""
 
-    return HTMLResponse(_admin_page(f"Task {task_id[:16]}", body))
+    return HTMLResponse(admin_page(f"Task {task_id[:16]}", body))
 
 
 # ---------------------------------------------------------------------------
@@ -1110,7 +716,7 @@ async def admin_agents(
         rep = agent.reputation
         rep_color = "#22c55e" if rep > 0 else "#ff4d4d" if rep < 0 else "#666"
         rep_str = f"+{rep:.1f}" if rep > 0 else f"{rep:.1f}" if rep < 0 else "0"
-        ago = _relative_time(agent.created_at)
+        ago = relative_time(agent.created_at)
         referred = "✓" if agent.referred_by else ""
         rows += (
             f"<tr>"
@@ -1164,7 +770,7 @@ async def admin_agents(
   {pag}
 </div>"""
 
-    return HTMLResponse(_admin_page("Agents", body))
+    return HTMLResponse(admin_page("Agents", body))
 
 
 # ---------------------------------------------------------------------------
@@ -1183,7 +789,7 @@ async def admin_agent_detail(
     row = result.first()
     if not row:
         return HTMLResponse(
-            _admin_page("Not Found", '<div class="section">Agent not found.</div>'),
+            admin_page("Not Found", '<div class="section">Agent not found.</div>'),
             status_code=404,
         )
 
@@ -1223,14 +829,14 @@ async def admin_agent_detail(
     for (task,) in tasks:
         need = html.escape((task.need or "")[:50])
         st = task.status.value if hasattr(task.status, "value") else task.status
-        ago = _relative_time(task.created_at)
+        ago = relative_time(task.created_at)
         role = "poster" if task.poster_id == agent_id else "worker"
         task_rows += (
             f"<tr>"
             f'<td class="mono"><a href="/admin/tasks/{html.escape(task.id)}">'
             f"{html.escape(task.id[:16])}</a></td>"
             f"<td>{need}</td>"
-            f'<td class="{_status_class(st)}">{st}</td>'
+            f'<td class="{status_class(st)}">{st}</td>'
             f"<td>{role}</td>"
             f'<td class="right">{task.max_credits}</td>'
             f'<td class="muted">{ago}</td>'
@@ -1250,7 +856,7 @@ async def admin_agent_detail(
     for (entry,) in ledger:
         color = "#22c55e" if entry.amount > 0 else "#ff4d4d"
         sign = "+" if entry.amount > 0 else ""
-        ago = _relative_time(entry.created_at)
+        ago = relative_time(entry.created_at)
         ledger_rows += (
             f"<tr>"
             f'<td style="color:{color};font-weight:bold">{sign}{entry.amount}</td>'
@@ -1340,7 +946,7 @@ async def admin_agent_detail(
   </table>
 </div>"""
 
-    return HTMLResponse(_admin_page(f"Agent: {name}", body))
+    return HTMLResponse(admin_page(f"Agent: {name}", body))
 
 
 # ---------------------------------------------------------------------------
@@ -1407,7 +1013,7 @@ async def admin_referrals(
             if referrer
             else referrer_name
         )
-        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        ago = relative_time(agent.created_at) if agent.created_at else "—"
         done_badge = (
             ' <span class="tag" style="background:#1a5e3a;color:#4dff88">✓ done</span>'
             if agent.id in agents_with_completed_tasks
@@ -1431,7 +1037,7 @@ async def admin_referrals(
         if referrer:
             rid = html.escape(referrer.id)
             rname = html.escape(referrer.name)
-            rago = _relative_time(referrer.created_at) if referrer.created_at else "—"
+            rago = relative_time(referrer.created_at) if referrer.created_at else "—"
             referrers_rows += (
                 f"<tr>"
                 f'<td><a href="/admin/agents/{rid}"><b>{rname}</b></a></td>'
@@ -1462,7 +1068,7 @@ async def admin_referrals(
             if agent.referred_by
             else ""
         )
-        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        ago = relative_time(agent.created_at) if agent.created_at else "—"
         aid = html.escape(agent.id)
         aname = html.escape(agent.name)
         welcome_rows += (
@@ -1479,7 +1085,7 @@ async def admin_referrals(
     for agent in sorted(
         likely_test_agents, key=lambda a: a.created_at or datetime.min, reverse=True
     ):
-        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        ago = relative_time(agent.created_at) if agent.created_at else "—"
         aid = html.escape(agent.id)
         aname = html.escape(agent.name)
         test_rows += (
@@ -1570,7 +1176,7 @@ async def admin_referrals(
   </table>
 </div>"""
 
-    return HTMLResponse(_admin_page("Referrals & Welcome", body))
+    return HTMLResponse(admin_page("Referrals & Welcome", body))
 
 
 # ---------------------------------------------------------------------------
@@ -1645,8 +1251,8 @@ async def admin_stats(
 
     # Requests per hour (last 48h)
     hourly_result = await session.execute(
-        text("""
-            SELECT strftime('%Y-%m-%d %H', hour) as h, SUM(request_count)
+        text(f"""
+            SELECT {sql_date_hour('hour')} as h, SUM(request_count)
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
             GROUP BY h
@@ -1658,8 +1264,8 @@ async def admin_stats(
 
     # Errors per hour (last 48h)
     errors_hourly_result = await session.execute(
-        text("""
-            SELECT strftime('%Y-%m-%d %H', hour) as h,
+        text(f"""
+            SELECT {sql_date_hour('hour')} as h,
                    SUM(error_4xx) as e4, SUM(error_5xx) as e5
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
@@ -1672,8 +1278,8 @@ async def admin_stats(
 
     # Requests per day (last 30d)
     daily_result = await session.execute(
-        text("""
-            SELECT strftime('%Y-%m-%d', hour) as d, SUM(request_count)
+        text(f"""
+            SELECT {sql_date_day('hour')} as d, SUM(request_count)
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
             GROUP BY d
@@ -1748,11 +1354,11 @@ async def admin_stats(
   <h2>Traffic (Last 48h)</h2>
   <div class="chart-container">
     <div class="chart-title">Requests per Hour</div>
-    {_svg_bar_chart(hourly_data, color="#4da6ff")}
+    {svg_bar_chart(hourly_data, color="#4da6ff")}
   </div>
   <div class="chart-container">
     <div class="chart-title">Errors per Hour</div>
-    {_svg_bar_chart(errors_data, color="#ff4d4d")}
+    {svg_bar_chart(errors_data, color="#ff4d4d")}
   </div>
 </div>
 
@@ -1760,7 +1366,7 @@ async def admin_stats(
   <h2>Traffic (Last 30d)</h2>
   <div class="chart-container">
     <div class="chart-title">Requests per Day</div>
-    {_svg_bar_chart(daily_data, color="#a855f7")}
+    {svg_bar_chart(daily_data, color="#a855f7")}
   </div>
 </div>
 
@@ -1779,4 +1385,4 @@ async def admin_stats(
   </table>
 </div>"""
 
-    return HTMLResponse(_admin_page("Route Stats", body))
+    return HTMLResponse(admin_page("Route Stats", body))
