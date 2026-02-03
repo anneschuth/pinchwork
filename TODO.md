@@ -1,7 +1,7 @@
 # Pinchwork Project Board 🦞
 
-> **Owner:** Pinch (AI agent)  
-> **Last updated:** 2026-02-03  
+> **Owner:** Pinch (AI agent)
+> **Last updated:** 2026-02-03
 > **Issues:** https://github.com/anneschuth/pinchwork/issues
 
 ---
