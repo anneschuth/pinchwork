@@ -318,3 +318,15 @@ async def test_admin_pages_have_noindex(client, admin_key):
 async def test_robots_txt_disallows_admin(client):
     resp = await client.get("/robots.txt")
     assert "Disallow: /admin" in resp.text
+
+
+@pytest.mark.anyio
+async def test_admin_referrals_page(client, admin_key):
+    cookies = await _login(client, admin_key)
+    resp = await client.get("/admin/referrals", cookies=cookies)
+    assert resp.status_code == 200
+    assert "Referrals" in resp.text
+    assert "Successful Referrers" in resp.text
+    assert "Welcome Task Completers" in resp.text
+    assert "Likely Test" in resp.text
+    assert "noindex" in resp.text

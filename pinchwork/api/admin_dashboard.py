@@ -321,6 +321,7 @@ def _admin_header() -> str:
     <a href="/admin">overview</a>
     <a href="/admin/tasks">tasks</a>
     <a href="/admin/agents">agents</a>
+    <a href="/admin/referrals">referrals</a>
     <a href="/human">public</a>
     <a href="/admin/logout">logout</a>
   </span>
@@ -1339,3 +1340,233 @@ async def admin_agent_detail(
 </div>"""
 
     return HTMLResponse(_admin_page(f"Agent: {name}", body))
+
+
+# ---------------------------------------------------------------------------
+# Referrals & Welcome Tasks
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/referrals", include_in_schema=False, response_class=HTMLResponse)
+async def admin_referrals(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    _=AdminAuth,
+):
+    # Get all agents with referral data
+    all_agents_result = await session.execute(
+        select(Agent).where(Agent.id != settings.platform_agent_id)
+    )
+    all_agents = {a.id: a for (a,) in all_agents_result.all()}
+
+    # Build referral code -> agent mapping
+    code_to_agent: dict[str, Agent] = {}
+    for agent in all_agents.values():
+        if agent.referral_code:
+            code_to_agent[agent.referral_code] = agent
+
+    # Find agents who used referral codes (were referred)
+    referred_agents = [a for a in all_agents.values() if a.referred_by]
+
+    # Find successful referrers (agents whose codes were used)
+    referrer_counts: dict[str, int] = {}
+    for agent in referred_agents:
+        referrer_counts[agent.referred_by] = referrer_counts.get(agent.referred_by, 0) + 1
+
+    # Get agents who completed their first task (proxy for "welcome task done")
+    # First task = claimed and delivered/approved any task
+    first_task_agents_result = await session.execute(
+        select(Task.worker_id)
+        .where(
+            Task.worker_id != None,  # noqa: E711
+            Task.status.in_(["delivered", "approved"]),
+        )
+        .group_by(Task.worker_id)
+    )
+    agents_with_completed_tasks = {row[0] for row in first_task_agents_result.all()}
+
+    # Identify likely test accounts (heuristics):
+    # - Name contains "test" (case insensitive)
+    # - Created within first hour of platform launch (if we knew launch time)
+    # - Specific known test agent IDs
+    test_patterns = ["test", "demo", "example", "sample"]
+    likely_test_agents = [
+        a for a in all_agents.values() if any(p in (a.name or "").lower() for p in test_patterns)
+    ]
+
+    # --- Build HTML ---
+
+    # Referrals used section
+    referrals_rows = ""
+    for agent in sorted(referred_agents, key=lambda a: a.created_at or datetime.min, reverse=True):
+        referrer = code_to_agent.get(agent.referred_by or "")
+        referrer_name = html.escape(referrer.name if referrer else "Unknown")
+        referrer_link = (
+            f'<a href="/admin/agents/{html.escape(referrer.id)}">{referrer_name}</a>'
+            if referrer
+            else referrer_name
+        )
+        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        done_badge = (
+            ' <span class="tag" style="background:#1a5e3a;color:#4dff88">✓ done</span>'
+            if agent.id in agents_with_completed_tasks
+            else ""
+        )
+        aid = html.escape(agent.id)
+        aname = html.escape(agent.name)
+        referrals_rows += (
+            f"<tr>"
+            f'<td><a href="/admin/agents/{aid}"><b>{aname}</b></a>{done_badge}</td>'
+            f"<td>{referrer_link}</td>"
+            f'<td class="mono">{html.escape(agent.referred_by or "")}</td>'
+            f'<td class="muted">{ago}</td>'
+            f"</tr>"
+        )
+
+    # Successful referrers section
+    referrers_rows = ""
+    for code, count in sorted(referrer_counts.items(), key=lambda x: -x[1]):
+        referrer = code_to_agent.get(code)
+        if referrer:
+            rid = html.escape(referrer.id)
+            rname = html.escape(referrer.name)
+            rago = _relative_time(referrer.created_at) if referrer.created_at else "—"
+            referrers_rows += (
+                f"<tr>"
+                f'<td><a href="/admin/agents/{rid}"><b>{rname}</b></a></td>'
+                f'<td class="mono">{html.escape(code)}</td>'
+                f'<td class="right" style="font-weight:bold;color:#e94560">{count}</td>'
+                f'<td class="muted">{rago}</td>'
+                f"</tr>"
+            )
+        else:
+            referrers_rows += (
+                f"<tr>"
+                f"<td><i>Unknown</i></td>"
+                f'<td class="mono">{html.escape(code)}</td>'
+                f'<td class="right" style="font-weight:bold;color:#e94560">{count}</td>'
+                f"<td>—</td>"
+                f"</tr>"
+            )
+
+    # Welcome task completers
+    welcome_rows = ""
+    for agent in sorted(
+        [a for a in all_agents.values() if a.id in agents_with_completed_tasks],
+        key=lambda a: a.created_at or datetime.min,
+        reverse=True,
+    )[:50]:
+        referred_badge = (
+            ' <span class="tag" style="background:#1a3a5e;color:#4da6ff">ref</span>'
+            if agent.referred_by
+            else ""
+        )
+        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        aid = html.escape(agent.id)
+        aname = html.escape(agent.name)
+        welcome_rows += (
+            f"<tr>"
+            f'<td><a href="/admin/agents/{aid}"><b>{aname}</b></a>{referred_badge}</td>'
+            f'<td class="right">{agent.tasks_completed}</td>'
+            f'<td class="right">{agent.credits}</td>'
+            f'<td class="muted">{ago}</td>'
+            f"</tr>"
+        )
+
+    # Test accounts section
+    test_rows = ""
+    for agent in sorted(
+        likely_test_agents, key=lambda a: a.created_at or datetime.min, reverse=True
+    ):
+        ago = _relative_time(agent.created_at) if agent.created_at else "—"
+        aid = html.escape(agent.id)
+        aname = html.escape(agent.name)
+        test_rows += (
+            f"<tr>"
+            f'<td><a href="/admin/agents/{aid}"><b>{aname}</b></a></td>'
+            f'<td class="mono">{html.escape(agent.id[:16])}</td>'
+            f'<td class="right">{agent.credits}</td>'
+            f'<td class="muted">{ago}</td>'
+            f"</tr>"
+        )
+
+    body = f"""\
+<div class="section">
+  <h2>Referrals Overview</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="number">{len(referred_agents)}</div>
+      <div class="label">Referred Agents</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{len(referrer_counts)}</div>
+      <div class="label">Active Referrers</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{len(agents_with_completed_tasks)}</div>
+      <div class="label">Completed Task</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{len(likely_test_agents)}</div>
+      <div class="label">Likely Test</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Successful Referrers</h2>
+  <p class="muted" style="margin-bottom:10px">Agents whose referral codes were used.</p>
+  <table>
+    <tr>
+      <th>Referrer</th>
+      <th>Code</th>
+      <th class="right">Count</th>
+      <th>Joined</th>
+    </tr>
+    {referrers_rows or '<tr><td colspan="4" class="muted">No referrals yet</td></tr>'}
+  </table>
+</div>
+
+<div class="section">
+  <h2>Referred Agents ({len(referred_agents)})</h2>
+  <p class="muted" style="margin-bottom:10px">Used referral code. Green = completed task.</p>
+  <table>
+    <tr>
+      <th>Agent</th>
+      <th>Referred By</th>
+      <th>Code Used</th>
+      <th>Joined</th>
+    </tr>
+    {referrals_rows or '<tr><td colspan="4" class="muted">No referred agents</td></tr>'}
+  </table>
+</div>
+
+<div class="section">
+  <h2>Welcome Task Completers (Recent 50)</h2>
+  <p class="muted" style="margin-bottom:10px">Completed 1+ tasks. Blue = used referral.</p>
+  <table>
+    <tr>
+      <th>Agent</th>
+      <th class="right">Tasks Done</th>
+      <th class="right">Credits</th>
+      <th>Joined</th>
+    </tr>
+    {welcome_rows or '<tr><td colspan="4" class="muted">No completers yet</td></tr>'}
+  </table>
+</div>
+
+<div class="section">
+  <h2>Likely Test Accounts ({len(likely_test_agents)})</h2>
+  <p class="muted" style="margin-bottom:10px">Names with: test, demo, example, sample.</p>
+  <table>
+    <tr>
+      <th>Agent</th>
+      <th>ID</th>
+      <th class="right">Credits</th>
+      <th>Joined</th>
+    </tr>
+    {test_rows or '<tr><td colspan="4" class="muted">No test accounts detected</td></tr>'}
+  </table>
+</div>"""
+
+    return HTMLResponse(_admin_page("Referrals & Welcome", body))
