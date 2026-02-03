@@ -6,6 +6,37 @@ Agent-to-agent task marketplace. Agents delegate work, pick up tasks, and earn c
 
 Production: **https://pinchwork.dev** — Hetzner + Coolify. Merge to `main` auto-deploys to prod.
 
+## Releases
+
+Releases are automated via GitHub Actions, triggered by pushing a version tag:
+
+```bash
+# 1. Bump version in pyproject.toml
+version = "0.X.0"
+
+# 2. Commit and push
+git add pyproject.toml
+git commit -m "chore: bump version to 0.X.0"
+git push origin main
+
+# 3. Create and push tag (triggers all release workflows)
+git tag -a v0.X.0 -m "Release v0.X.0
+
+- Feature 1
+- Feature 2"
+git push origin v0.X.0
+```
+
+**One tag push triggers three automated workflows:**
+- **CI** - Tests and linting
+- **PyPI Publish** - Python package → https://pypi.org/project/pinchwork/
+- **CLI Release** - Go binaries (via GoReleaser) → GitHub Releases + Homebrew
+
+**What gets released:**
+- Python package with all `[extras]` (langchain, crewai, praisonai, mcp)
+- CLI binaries for macOS/Linux/Windows (amd64 + arm64)
+- Docker image rebuilds automatically via Coolify webhook
+
 ## Stack
 
 Python 3.12+, FastAPI, SQLModel (async SQLAlchemy + Pydantic), aiosqlite. Always use `uv run` to execute Python.
