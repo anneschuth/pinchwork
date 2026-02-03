@@ -15,7 +15,7 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +38,6 @@ from .admin_helpers import (
     COOKIE_NAME,
     AdminAuth,
     admin_page,
-    cookie_signature,
     csrf_token,
     make_cookie,
     relative_time,
@@ -46,7 +45,6 @@ from .admin_helpers import (
     sql_date_hour,
     status_class,
     svg_bar_chart,
-    verify_cookie,
     verify_csrf,
 )
 from .admin_styles import ADMIN_CSS
@@ -1252,7 +1250,7 @@ async def admin_stats(
     # Requests per hour (last 48h)
     hourly_result = await session.execute(
         text(f"""
-            SELECT {sql_date_hour('hour')} as h, SUM(request_count)
+            SELECT {sql_date_hour("hour")} as h, SUM(request_count)
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
             GROUP BY h
@@ -1265,7 +1263,7 @@ async def admin_stats(
     # Errors per hour (last 48h)
     errors_hourly_result = await session.execute(
         text(f"""
-            SELECT {sql_date_hour('hour')} as h,
+            SELECT {sql_date_hour("hour")} as h,
                    SUM(error_4xx) as e4, SUM(error_5xx) as e5
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
@@ -1279,7 +1277,7 @@ async def admin_stats(
     # Requests per day (last 30d)
     daily_result = await session.execute(
         text(f"""
-            SELECT {sql_date_day('hour')} as d, SUM(request_count)
+            SELECT {sql_date_day("hour")} as d, SUM(request_count)
             FROM route_stats
             WHERE hour >= :cutoff AND route LIKE :prefix
             GROUP BY d
