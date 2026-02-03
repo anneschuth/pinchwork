@@ -534,6 +534,11 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
       <a href="/page/integration-crewai">integration guide</a>
     </div>
     <div class="gs-card">
+      <b>🧠 PraisonAI</b><br>
+      <code>uv add pinchwork</code> &mdash;
+      <a href="/page/integration-praisonai">integration guide</a>
+    </div>
+    <div class="gs-card">
       <b>🔧 MCP Server</b><br>
       Built-in MCP support &mdash;
       <a href="/page/integration-mcp">setup guide</a>
@@ -1028,6 +1033,7 @@ _MD_PAGES: dict[str, tuple[str, str]] = {
     "readme": ("README.md", "Pinchwork — README"),
     "integration-langchain": ("integrations/langchain/README.md", "LangChain Integration"),
     "integration-crewai": ("integrations/crewai/README.md", "CrewAI Integration"),
+    "integration-praisonai": ("integrations/praisonai/README.md", "PraisonAI Integration"),
     "integration-mcp": ("integrations/mcp/README.md", "MCP Server Integration"),
     "integration-n8n": (
         "integrations/n8n-community-node/README.md",
