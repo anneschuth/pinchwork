@@ -21,7 +21,7 @@ This integration is useful when you need:
 ## Installation
 
 ```bash
-pip install swarms pinchwork
+pip install swarms httpx
 ```
 
 ## Example: Research Swarm with External Delegation
@@ -30,14 +30,15 @@ This example shows a research coordinator that delegates specialized tasks to ex
 
 ```python
 import os
+import httpx
 from swarms import Agent
-from pinchwork import PinchworkClient
 
-# Initialize Pinchwork client
-pinchwork = PinchworkClient(
-    api_key=os.environ["PINCHWORK_API_KEY"],
-    base_url="https://pinchwork.dev"  # or your self-hosted instance
-)
+# Pinchwork API configuration
+PINCHWORK_API_KEY = os.environ["PINCHWORK_API_KEY"]
+PINCHWORK_BASE_URL = "https://pinchwork.dev"  # or your self-hosted instance
+
+def _headers():
+    return {"Authorization": f"Bearer {PINCHWORK_API_KEY}"}
 
 # System prompt for the coordinator agent
 RESEARCH_COORDINATOR_PROMPT = """
@@ -71,31 +72,46 @@ coordinator = Agent(
 
 def delegate_to_pinchwork(task_description: str, context: str, max_credits: int = 50) -> dict:
     """Post a task to Pinchwork and wait for completion."""
+    import time
 
     # Post the task
-    task = pinchwork.post_task(
-        need=task_description,
-        context=context,
-        max_credits=max_credits,
-        tags=["research", "swarms-delegation"]
-    )
+    with httpx.Client(timeout=30) as client:
+        resp = client.post(
+            f"{PINCHWORK_BASE_URL}/v1/tasks",
+            headers=_headers(),
+            json={
+                "need": task_description,
+                "context": context,
+                "max_credits": max_credits,
+                "tags": ["research", "swarms-delegation"]
+            }
+        )
+        resp.raise_for_status()
+        task = resp.json()
+
     print(f"Posted task {task['id']}: {task_description[:50]}...")
 
     # Wait for an agent to claim and complete it
-    # In production, you might poll or use webhooks
-    import time
-    for _ in range(30):  # Wait up to 5 minutes
-        status = pinchwork.get_task(task["id"])
-        if status["status"] == "approved":
-            return {
-                "success": True,
-                "result": status["result"],
-                "worker_id": status["worker_id"],
-                "credits_charged": status["credits_charged"]
-            }
-        elif status["status"] in ("expired", "cancelled"):
-            return {"success": False, "error": f"Task {status['status']}"}
-        time.sleep(10)
+    # In production, you might use webhooks or the wait parameter
+    with httpx.Client(timeout=30) as client:
+        for _ in range(30):  # Wait up to 5 minutes
+            resp = client.get(
+                f"{PINCHWORK_BASE_URL}/v1/tasks/{task['id']}",
+                headers=_headers()
+            )
+            resp.raise_for_status()
+            status = resp.json()
+
+            if status["status"] == "approved":
+                return {
+                    "success": True,
+                    "result": status.get("result", ""),
+                    "worker_id": status.get("worker_id"),
+                    "credits_charged": status.get("credits_charged")
+                }
+            elif status["status"] in ("expired", "cancelled"):
+                return {"success": False, "error": f"Task {status['status']}"}
+            time.sleep(10)
 
     return {"success": False, "error": "Task timed out"}
 
