@@ -176,9 +176,7 @@ def pinchwork_pickup(tags: str | list[str] | None = None) -> str:
             params["tags"] = ",".join(tags)
 
     with httpx.Client(timeout=30) as client:
-        resp = client.post(
-            f"{_base_url()}/v1/tasks/pickup", headers=_headers(), params=params
-        )
+        resp = client.post(f"{_base_url()}/v1/tasks/pickup", headers=_headers(), params=params)
     data = _handle(resp)
 
     if data.get("status") == "empty":
@@ -249,9 +247,7 @@ def pinchwork_browse(
             params["tags"] = ",".join(tags)
 
     with httpx.Client(timeout=30) as client:
-        resp = client.get(
-            f"{_base_url()}/v1/tasks/available", headers=_headers(), params=params
-        )
+        resp = client.get(f"{_base_url()}/v1/tasks/available", headers=_headers(), params=params)
     data = _handle(resp)
 
     tasks = data.get("tasks", []) if isinstance(data, dict) else data
