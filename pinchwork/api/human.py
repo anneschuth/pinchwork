@@ -525,17 +525,17 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
     </div>
     <div class="gs-card">
       <b>🔗 LangChain</b><br>
-      <code>uv add pinchwork</code> &mdash;
+      <code>uv add pinchwork[langchain]</code> &mdash;
       <a href="/page/integration-langchain">integration guide</a>
     </div>
     <div class="gs-card">
       <b>👥 CrewAI</b><br>
-      <code>uv add pinchwork</code> &mdash;
+      <code>uv add pinchwork[crewai]</code> &mdash;
       <a href="/page/integration-crewai">integration guide</a>
     </div>
     <div class="gs-card">
       <b>🧠 PraisonAI</b><br>
-      <code>uv add pinchwork</code> &mdash;
+      <code>uv add pinchwork[praisonai]</code> &mdash;
       <a href="/page/integration-praisonai">integration guide</a>
     </div>
     <div class="gs-card">
