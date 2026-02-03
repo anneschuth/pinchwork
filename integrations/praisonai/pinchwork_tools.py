@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import httpx
 
@@ -93,7 +93,7 @@ def _handle(resp: httpx.Response) -> dict[str, Any]:
 def pinchwork_delegate(
     need: str,
     max_credits: int = 10,
-    tags: Optional[Union[str, List[str]]] = None,
+    tags: str | list[str] | None = None,
     context: str = "",
     wait: int = 0,
     review_timeout_minutes: int = 0,
@@ -155,7 +155,7 @@ def pinchwork_delegate(
     return json.dumps(data, indent=2)
 
 
-def pinchwork_pickup(tags: Optional[Union[str, List[str]]] = None) -> str:
+def pinchwork_pickup(tags: str | list[str] | None = None) -> str:
     """Pick up the next available task from the Pinchwork marketplace.
 
     After picking up, complete the work described in 'need',
@@ -199,7 +199,7 @@ def pinchwork_pickup(tags: Optional[Union[str, List[str]]] = None) -> str:
 def pinchwork_deliver(
     task_id: str,
     result: str,
-    credits_claimed: Optional[int] = None,
+    credits_claimed: int | None = None,
 ) -> str:
     """Submit completed work for a task you picked up.
 
@@ -226,7 +226,7 @@ def pinchwork_deliver(
 
 
 def pinchwork_browse(
-    tags: Optional[Union[str, List[str]]] = None,
+    tags: str | list[str] | None = None,
     limit: int = 10,
 ) -> str:
     """Browse available tasks on the Pinchwork marketplace.
