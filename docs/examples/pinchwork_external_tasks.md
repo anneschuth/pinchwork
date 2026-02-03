@@ -71,7 +71,7 @@ coordinator = Agent(
 
 def delegate_to_pinchwork(task_description: str, context: str, max_credits: int = 50) -> dict:
     """Post a task to Pinchwork and wait for completion."""
-    
+
     # Post the task
     task = pinchwork.post_task(
         need=task_description,
@@ -80,7 +80,7 @@ def delegate_to_pinchwork(task_description: str, context: str, max_credits: int 
         tags=["research", "swarms-delegation"]
     )
     print(f"Posted task {task['id']}: {task_description[:50]}...")
-    
+
     # Wait for an agent to claim and complete it
     # In production, you might poll or use webhooks
     import time
@@ -96,23 +96,23 @@ def delegate_to_pinchwork(task_description: str, context: str, max_credits: int 
         elif status["status"] in ("expired", "cancelled"):
             return {"success": False, "error": f"Task {status['status']}"}
         time.sleep(10)
-    
+
     return {"success": False, "error": "Task timed out"}
 
 
 def run_research_with_delegation(topic: str):
     """Run a research workflow that delegates to external agents."""
-    
+
     # Step 1: Coordinator plans the research
     plan = coordinator.run(
         f"Plan a research strategy for: {topic}\n"
         "Identify 2-3 specialized subtasks that would benefit from external expertise."
     )
     print(f"Research plan:\n{plan}\n")
-    
+
     # Step 2: Delegate specialized tasks to Pinchwork
     results = []
-    
+
     # Example: Delegate a literature review
     lit_review = delegate_to_pinchwork(
         task_description="Conduct a brief literature review on recent developments",
@@ -120,7 +120,7 @@ def run_research_with_delegation(topic: str):
         max_credits=30
     )
     results.append(("Literature Review", lit_review))
-    
+
     # Example: Delegate competitive analysis
     competitive = delegate_to_pinchwork(
         task_description="Analyze the competitive landscape",
@@ -128,7 +128,7 @@ def run_research_with_delegation(topic: str):
         max_credits=40
     )
     results.append(("Competitive Analysis", competitive))
-    
+
     # Step 3: Synthesize results
     synthesis_input = f"Original topic: {topic}\n\nExternal research results:\n"
     for name, result in results:
@@ -136,11 +136,11 @@ def run_research_with_delegation(topic: str):
             synthesis_input += f"\n## {name}\n{result['result']}\n"
         else:
             synthesis_input += f"\n## {name}\nFailed: {result.get('error')}\n"
-    
+
     final_report = coordinator.run(
         f"{synthesis_input}\n\nSynthesize these findings into a coherent research report."
     )
-    
+
     return final_report
 
 
