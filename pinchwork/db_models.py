@@ -175,6 +175,27 @@ class TaskMessage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class RouteStats(SQLModel, table=True):
+    """Hourly aggregated stats per route for analytics."""
+
+    __tablename__ = "route_stats"
+    __table_args__ = (
+        Index("ix_route_stats_hour", "hour"),
+        Index("ix_route_stats_unique", "route", "method", "hour", unique=True),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    route: str = Field(index=True)  # path pattern e.g. "/v1/tasks"
+    method: str  # GET, POST, etc.
+    hour: datetime  # truncated to hour
+    request_count: int = Field(default=0)
+    error_4xx: int = Field(default=0)
+    error_5xx: int = Field(default=0)
+    total_ms: int = Field(default=0)  # sum of response times for avg calc
+    min_ms: int = Field(default=999999)
+    max_ms: int = Field(default=0)
+
+
 class AgentTrust(SQLModel, table=True):
     __tablename__ = "agent_trust"
     __table_args__ = (Index("ix_agent_trust_pair", "truster_id", "trusted_id", unique=True),)

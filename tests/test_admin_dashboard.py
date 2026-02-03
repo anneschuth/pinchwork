@@ -330,3 +330,22 @@ async def test_admin_referrals_page(client, admin_key):
     assert "Welcome Task Completers" in resp.text
     assert "Likely Test" in resp.text
     assert "noindex" in resp.text
+
+
+@pytest.mark.anyio
+async def test_admin_stats_page(client, admin_key):
+    cookies = await _login(client, admin_key)
+    resp = await client.get("/admin/stats", cookies=cookies)
+    assert resp.status_code == 200
+    assert "Route Statistics" in resp.text
+    assert "Total Requests" in resp.text
+    assert "Top Routes" in resp.text
+    assert "noindex" in resp.text
+
+
+@pytest.mark.anyio
+async def test_admin_stats_filter(client, admin_key):
+    cookies = await _login(client, admin_key)
+    resp = await client.get("/admin/stats?prefix=/v1", cookies=cookies)
+    assert resp.status_code == 200
+    assert "Route Statistics" in resp.text

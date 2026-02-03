@@ -322,6 +322,7 @@ def _admin_header() -> str:
     <a href="/admin/tasks">tasks</a>
     <a href="/admin/agents">agents</a>
     <a href="/admin/referrals">referrals</a>
+    <a href="/admin/stats">stats</a>
     <a href="/human">public</a>
     <a href="/admin/logout">logout</a>
   </span>
@@ -1570,3 +1571,212 @@ async def admin_referrals(
 </div>"""
 
     return HTMLResponse(_admin_page("Referrals & Welcome", body))
+
+
+# ---------------------------------------------------------------------------
+# Route Statistics
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/stats", include_in_schema=False, response_class=HTMLResponse)
+async def admin_stats(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    _=AdminAuth,
+    prefix: str = "",
+):
+    # Time ranges
+    now = datetime.now(UTC)
+    cutoff_48h = now - timedelta(hours=48)
+    cutoff_7d = now - timedelta(days=7)
+    cutoff_30d = now - timedelta(days=30)
+
+    # Total stats (all time)
+    total_result = await session.execute(
+        text("""
+            SELECT
+                COUNT(DISTINCT route) as routes,
+                SUM(request_count) as requests,
+                SUM(error_4xx) as errors_4xx,
+                SUM(error_5xx) as errors_5xx,
+                SUM(total_ms) as total_ms
+            FROM route_stats
+            WHERE route LIKE :prefix
+        """),
+        {"prefix": f"{prefix}%"},
+    )
+    totals = total_result.first()
+    total_requests = totals[1] or 0
+    total_4xx = totals[2] or 0
+    total_5xx = totals[3] or 0
+    total_ms = totals[4] or 0
+    avg_ms = int(total_ms / total_requests) if total_requests else 0
+    error_rate = (total_4xx + total_5xx) / total_requests * 100 if total_requests else 0
+
+    # Last 24h stats
+    last_24h_result = await session.execute(
+        text("""
+            SELECT SUM(request_count), SUM(error_4xx), SUM(error_5xx)
+            FROM route_stats
+            WHERE hour >= :cutoff AND route LIKE :prefix
+        """),
+        {"cutoff": (now - timedelta(hours=24)).isoformat(), "prefix": f"{prefix}%"},
+    )
+    last_24h = last_24h_result.first()
+    requests_24h = last_24h[0] or 0
+
+    # Top routes by traffic (last 7d)
+    top_routes_result = await session.execute(
+        text("""
+            SELECT
+                route,
+                SUM(request_count) as reqs,
+                SUM(error_4xx + error_5xx) as errors,
+                ROUND(AVG(total_ms * 1.0 / request_count), 1) as avg_ms
+            FROM route_stats
+            WHERE hour >= :cutoff AND route LIKE :prefix
+            GROUP BY route
+            ORDER BY reqs DESC
+            LIMIT 25
+        """),
+        {"cutoff": cutoff_7d.isoformat(), "prefix": f"{prefix}%"},
+    )
+    top_routes = top_routes_result.all()
+
+    # Requests per hour (last 48h)
+    hourly_result = await session.execute(
+        text("""
+            SELECT strftime('%Y-%m-%d %H', hour) as h, SUM(request_count)
+            FROM route_stats
+            WHERE hour >= :cutoff AND route LIKE :prefix
+            GROUP BY h
+            ORDER BY h
+        """),
+        {"cutoff": cutoff_48h.isoformat(), "prefix": f"{prefix}%"},
+    )
+    hourly_data = [(h.split(" ")[1] + "h", c) for h, c in hourly_result.all()]
+
+    # Errors per hour (last 48h)
+    errors_hourly_result = await session.execute(
+        text("""
+            SELECT strftime('%Y-%m-%d %H', hour) as h,
+                   SUM(error_4xx) as e4, SUM(error_5xx) as e5
+            FROM route_stats
+            WHERE hour >= :cutoff AND route LIKE :prefix
+            GROUP BY h
+            ORDER BY h
+        """),
+        {"cutoff": cutoff_48h.isoformat(), "prefix": f"{prefix}%"},
+    )
+    errors_data = [(h.split(" ")[1] + "h", e4 + e5) for h, e4, e5 in errors_hourly_result.all()]
+
+    # Requests per day (last 30d)
+    daily_result = await session.execute(
+        text("""
+            SELECT strftime('%Y-%m-%d', hour) as d, SUM(request_count)
+            FROM route_stats
+            WHERE hour >= :cutoff AND route LIKE :prefix
+            GROUP BY d
+            ORDER BY d
+        """),
+        {"cutoff": cutoff_30d.isoformat(), "prefix": f"{prefix}%"},
+    )
+    daily_data = [(d[5:], c) for d, c in daily_result.all()]  # MM-DD format
+
+    # Build routes table
+    routes_rows = ""
+    for route, reqs, errors, avg in top_routes:
+        err_rate = errors / reqs * 100 if reqs else 0
+        err_color = "#ff4d4d" if err_rate > 5 else "#ff9f43" if err_rate > 1 else "#666"
+        routes_rows += (
+            f"<tr>"
+            f'<td class="mono">{html.escape(route)}</td>'
+            f'<td class="right">{reqs:,}</td>'
+            f'<td class="right" style="color:{err_color}">{errors}</td>'
+            f'<td class="right">{err_rate:.1f}%</td>'
+            f'<td class="right">{avg:.0f}ms</td>'
+            f"</tr>"
+        )
+
+    # Filter links
+    prefixes = [
+        ("", "all"),
+        ("/v1", "API"),
+        ("/human", "human"),
+        ("/admin", "admin"),
+        ("/a2a", "A2A"),
+    ]
+    filter_html = '<div style="margin-bottom:12px;font-size:9pt">Filter: '
+    for p, label in prefixes:
+        active = ' style="color:#e94560;font-weight:bold"' if p == prefix else ""
+        filter_html += f' <a href="/admin/stats?prefix={p}"{active}>{label}</a>'
+    filter_html += "</div>"
+
+    body = f"""\
+<div class="section">
+  <h2>Route Statistics</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="number">{total_requests:,}</div>
+      <div class="label">Total Requests</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{requests_24h:,}</div>
+      <div class="label">Last 24h</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{avg_ms}ms</div>
+      <div class="label">Avg Response</div>
+    </div>
+    <div class="stat-card">
+      <div class="number" style="color:{"#ff4d4d" if error_rate > 5 else "#22c55e"}">\
+{error_rate:.1f}%</div>
+      <div class="label">Error Rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{total_4xx:,}</div>
+      <div class="label">4xx Errors</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{total_5xx:,}</div>
+      <div class="label">5xx Errors</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Traffic (Last 48h)</h2>
+  <div class="chart-container">
+    <div class="chart-title">Requests per Hour</div>
+    {_svg_bar_chart(hourly_data, color="#4da6ff")}
+  </div>
+  <div class="chart-container">
+    <div class="chart-title">Errors per Hour</div>
+    {_svg_bar_chart(errors_data, color="#ff4d4d")}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Traffic (Last 30d)</h2>
+  <div class="chart-container">
+    <div class="chart-title">Requests per Day</div>
+    {_svg_bar_chart(daily_data, color="#a855f7")}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Top Routes (Last 7d)</h2>
+  {filter_html}
+  <table>
+    <tr>
+      <th>Route</th>
+      <th class="right">Requests</th>
+      <th class="right">Errors</th>
+      <th class="right">Error %</th>
+      <th class="right">Avg Time</th>
+    </tr>
+    {routes_rows or '<tr><td colspan="5" class="muted">No data yet</td></tr>'}
+  </table>
+</div>"""
+
+    return HTMLResponse(_admin_page("Route Stats", body))
