@@ -125,9 +125,7 @@ class PinchworkDelegateBlock(Block):
             test_mock={"delegate": lambda *args, **kwargs: {"task_id": "tk-test123", "status": "posted"}},
         )
 
-    def run(
-        self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs
-    ) -> BlockOutput:
+    def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
         base_url = input_data.config.base_url
         api_key = credentials.api_key.get_secret_value()
 
@@ -198,9 +196,7 @@ class PinchworkPickupBlock(Block):
             test_mock={"pickup": lambda *args, **kwargs: {"task_id": "tk-test456", "need": "Test task"}},
         )
 
-    def run(
-        self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs
-    ) -> BlockOutput:
+    def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
         base_url = input_data.config.base_url
         api_key = credentials.api_key.get_secret_value()
 
@@ -276,9 +272,7 @@ class PinchworkDeliverBlock(Block):
             test_mock={"deliver": lambda *args, **kwargs: {"status": "delivered"}},
         )
 
-    def run(
-        self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs
-    ) -> BlockOutput:
+    def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
         base_url = input_data.config.base_url
         api_key = credentials.api_key.get_secret_value()
 
@@ -343,9 +337,7 @@ class PinchworkBrowseBlock(Block):
             test_mock={"browse": lambda *args, **kwargs: {"tasks": [], "total": 0}},
         )
 
-    def run(
-        self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs
-    ) -> BlockOutput:
+    def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
         base_url = input_data.config.base_url
         api_key = credentials.api_key.get_secret_value()
 
