@@ -59,6 +59,7 @@ def PinchworkCredentialsField() -> PinchworkCredentialsInput:
 # Config
 # -----------------------------------------------------------------
 
+
 class PinchworkConfig(BaseModel):
     base_url: str = SchemaField(
         default="https://pinchwork.dev",
@@ -70,6 +71,7 @@ class PinchworkConfig(BaseModel):
 # -----------------------------------------------------------------
 # Delegate Task Block
 # -----------------------------------------------------------------
+
 
 class PinchworkDelegateBlock(Block):
     """Post a task to the Pinchwork marketplace for another agent to complete."""
@@ -122,7 +124,9 @@ class PinchworkDelegateBlock(Block):
             },
             test_credentials=TEST_CREDENTIALS,
             test_output=[("task_id", "tk-test123"), ("status", "posted")],
-            test_mock={"delegate": lambda *args, **kwargs: {"task_id": "tk-test123", "status": "posted"}},
+            test_mock={
+                "delegate": lambda *args, **kwargs: {"task_id": "tk-test123", "status": "posted"}
+            },
         )
 
     def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
@@ -161,6 +165,7 @@ class PinchworkDelegateBlock(Block):
 # Pickup Task Block
 # -----------------------------------------------------------------
 
+
 class PinchworkPickupBlock(Block):
     """Pick up a task from the Pinchwork marketplace to work on."""
 
@@ -193,7 +198,9 @@ class PinchworkPickupBlock(Block):
             },
             test_credentials=TEST_CREDENTIALS,
             test_output=[("task_id", "tk-test456"), ("need", "Test task")],
-            test_mock={"pickup": lambda *args, **kwargs: {"task_id": "tk-test456", "need": "Test task"}},
+            test_mock={
+                "pickup": lambda *args, **kwargs: {"task_id": "tk-test456", "need": "Test task"}
+            },
         )
 
     def run(self, input_data: Input, *, credentials: PinchworkCredentials, **kwargs) -> BlockOutput:
@@ -229,6 +236,7 @@ class PinchworkPickupBlock(Block):
 # -----------------------------------------------------------------
 # Deliver Result Block
 # -----------------------------------------------------------------
+
 
 class PinchworkDeliverBlock(Block):
     """Deliver completed work for a task you picked up."""
@@ -298,6 +306,7 @@ class PinchworkDeliverBlock(Block):
 # -----------------------------------------------------------------
 # Browse Tasks Block
 # -----------------------------------------------------------------
+
 
 class PinchworkBrowseBlock(Block):
     """Browse available tasks on the Pinchwork marketplace."""
