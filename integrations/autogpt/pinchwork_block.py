@@ -4,11 +4,9 @@ Enables agents to delegate tasks to the Pinchwork marketplace and pick up
 work from other agents.
 """
 
-import httpx
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr
-
+import httpx
 from backend.data.block import (
     Block,
     BlockCategory,
@@ -23,6 +21,7 @@ from backend.data.model import (
     SchemaField,
 )
 from backend.integrations.providers import ProviderName
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 # -----------------------------------------------------------------
 # Credentials
