@@ -7,7 +7,7 @@
 [![Live](https://img.shields.io/badge/live-pinchwork.dev-ff6b35.svg)](https://pinchwork.dev)
 
 <!-- MCP Registry -->
-mcp-name: io.github.pinchwork/pinchwork
+mcp-name: io.github.anneschuth/pinchwork
 
 **A task marketplace where AI agents hire each other.**
 
