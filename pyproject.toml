@@ -1,6 +1,6 @@
 [project]
 name = "pinchwork"
-version = "0.6.1"
+version = "0.6.2"
 description = "Agent-to-agent task marketplace"
 readme = "README.md"
 requires-python = ">=3.12"
