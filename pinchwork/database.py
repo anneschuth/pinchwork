@@ -6,9 +6,9 @@ import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from pinchwork.config import settings
 from pinchwork.db_models import (  # noqa: F401 — register tables
@@ -150,3 +150,21 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 def get_session_factory() -> sessionmaker:
     assert _session_factory is not None
     return _session_factory
+
+
+def SessionLocal() -> Session:
+    """Create a synchronous database session for background tasks (like seeder).
+
+    This is a sync wrapper around the async database for use in blocking
+    background tasks where async is not available.
+    """
+    # Convert async URL to sync URL
+    db_url = settings.database_url
+    if not db_url.startswith("sqlite"):
+        db_url = f"sqlite:///{db_url}"
+    else:
+        db_url = db_url.replace("+aiosqlite", "")
+
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+    session_factory = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
+    return session_factory()
