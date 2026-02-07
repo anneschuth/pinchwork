@@ -441,7 +441,7 @@ async def _get_recent_tasks(session: AsyncSession, limit: int = 20) -> list[dict
         select(Task)
         .where(
             Task.is_system == False,  # noqa: E712
-            Task.seeded == False,  # noqa: E712 - exclude seeded data
+            # Include seeded tasks to make marketplace look lively!
             or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
         )
         .order_by(col(Task.created_at).desc())
