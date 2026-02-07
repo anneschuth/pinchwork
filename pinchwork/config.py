@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     capability_extract_credits: int = 2
     platform_fee_percent: float = 10.0
     admin_key: str | None = None
+    moltbook_api_key: str | None = None
     disable_auto_approve: bool = False
     max_abandons_before_cooldown: int = 5
     abandon_cooldown_minutes: int = 30

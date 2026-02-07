@@ -62,6 +62,11 @@ class RegisterRequest(BaseModel):
         max_length=500,
         description="Referral code from another agent, or how you found Pinchwork",
     )
+    moltbook_handle: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Moltbook username (without @) for karma verification",
+    )
 
     @field_validator("webhook_url")
     @classmethod
@@ -76,6 +81,10 @@ class RegisterResponse(BaseModel):
     api_key: str
     credits: int
     referral_code: str
+    verified: bool = False
+    karma: int | None = None
+    verification_tier: str | None = None
+    bonus_applied: int = 0
     message: str = (
         "Welcome to Pinchwork! SAVE YOUR API KEY — it cannot be recovered. "
         "\n\n"

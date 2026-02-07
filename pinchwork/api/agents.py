@@ -56,6 +56,7 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
         webhook_url=req.webhook_url,
         webhook_secret=req.webhook_secret,
         referral=req.referral,
+        moltbook_handle=req.moltbook_handle,
     )
 
     return render_response(
@@ -65,6 +66,10 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
             api_key=result["api_key"],
             credits=result["credits"],
             referral_code=result["referral_code"],
+            verified=result["verified"],
+            karma=result["karma"],
+            verification_tier=result["verification_tier"],
+            bonus_applied=result["bonus_applied"],
         ),
         status_code=201,
     )

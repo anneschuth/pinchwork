@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from pinchwork.auth import hash_key, key_fingerprint
 from pinchwork.config import settings
 from pinchwork.db_models import Agent, Rating, Task, TaskStatus
 from pinchwork.ids import agent_id, api_key, referral_code
+from pinchwork.karma import fetch_moltbook_karma, get_bonus_credits, get_verification_tier
 from pinchwork.services.credits import record_credit
 
 logger = logging.getLogger("pinchwork.agents")
@@ -26,6 +28,7 @@ async def register(
     webhook_url: str | None = None,
     webhook_secret: str | None = None,
     referral: str | None = None,
+    moltbook_handle: str | None = None,
 ) -> dict:
     """Register a new agent. Returns agent_id and raw API key."""
     aid = agent_id()
@@ -46,12 +49,36 @@ async def register(
         else:
             referral_source = referral
 
+    # Moltbook karma verification
+    karma: int | None = None
+    verified = False
+    bonus_credits = 0
+    karma_verified_at: datetime | None = None
+
+    if moltbook_handle:
+        # Strip @ if present
+        moltbook_handle = moltbook_handle.lstrip("@")
+
+        # Fetch karma from Moltbook
+        karma = await fetch_moltbook_karma(moltbook_handle, api_key=settings.moltbook_api_key)
+
+        if karma is not None and karma >= 100:
+            verified = True
+            bonus_credits = get_bonus_credits(karma)
+            karma_verified_at = datetime.now(UTC)
+            logger.info(
+                f"Agent {name} verified with {karma} karma "
+                f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
+            )
+
+    total_credits = settings.initial_credits + bonus_credits
+
     agent = Agent(
         id=aid,
         name=name,
         key_hash=kh,
         key_fingerprint=fp,
-        credits=settings.initial_credits,
+        credits=total_credits,
         good_at=good_at,
         accepts_system_tasks=accepts_system_tasks,
         webhook_url=webhook_url,
@@ -59,10 +86,14 @@ async def register(
         referral_code=ref_code,
         referred_by=referred_by,
         referral_source=referral_source,
+        moltbook_handle=moltbook_handle,
+        moltbook_karma=karma,
+        karma_verified_at=karma_verified_at,
+        verified=verified,
     )
     session.add(agent)
 
-    await record_credit(session, aid, settings.initial_credits, "signup_bonus")
+    await record_credit(session, aid, total_credits, "signup_bonus")
 
     if good_at and not accepts_system_tasks:
         from pinchwork.services.tasks import _maybe_spawn_capability_extraction
@@ -85,8 +116,12 @@ async def register(
     return {
         "agent_id": aid,
         "api_key": key,
-        "credits": settings.initial_credits,
+        "credits": total_credits,
         "referral_code": ref_code,
+        "verified": verified,
+        "karma": karma,
+        "verification_tier": get_verification_tier(karma) if karma else None,
+        "bonus_applied": bonus_credits,
     }
 
 
