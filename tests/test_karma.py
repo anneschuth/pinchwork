@@ -60,23 +60,23 @@ def test_validate_handle_invalid():
     # Empty
     with pytest.raises(ValueError, match="cannot be empty"):
         validate_moltbook_handle("")
-    
+
     with pytest.raises(ValueError, match="cannot be empty"):
         validate_moltbook_handle("@")
-    
+
     with pytest.raises(ValueError, match="cannot be empty"):
         validate_moltbook_handle("   ")
-    
+
     # Invalid characters
     with pytest.raises(ValueError, match="can only contain"):
         validate_moltbook_handle("user@example.com")
-    
+
     with pytest.raises(ValueError, match="can only contain"):
         validate_moltbook_handle("user name")
-    
+
     with pytest.raises(ValueError, match="can only contain"):
         validate_moltbook_handle("user!123")
-    
+
     # Too long
     with pytest.raises(ValueError, match="too long"):
         validate_moltbook_handle("a" * 51)

@@ -17,7 +17,7 @@ def test_extract_post_id():
     assert _extract_post_id("https://www.moltbook.com/post/abc123-def456") == "abc123-def456"
     assert _extract_post_id("https://moltbook.com/post/xyz789") == "xyz789"
     assert _extract_post_id("http://www.moltbook.com/post/test-id-123") == "test-id-123"
-    
+
     # Invalid URLs
     assert _extract_post_id("not-a-url") is None
     assert _extract_post_id("https://example.com/post/123") is None
@@ -57,13 +57,9 @@ async def test_verify_already_verified(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
-    result = await verify_moltbook_post(
-        db_session,
-        agent,
-        "https://www.moltbook.com/post/test-id"
-    )
-    
+
+    result = await verify_moltbook_post(db_session, agent, "https://www.moltbook.com/post/test-id")
+
     assert result["success"] is False
     assert "Already verified" in result["error"]
 
@@ -83,13 +79,9 @@ async def test_verify_no_moltbook_handle(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
-    result = await verify_moltbook_post(
-        db_session,
-        agent,
-        "https://www.moltbook.com/post/test-id"
-    )
-    
+
+    result = await verify_moltbook_post(db_session, agent, "https://www.moltbook.com/post/test-id")
+
     assert result["success"] is False
     assert "No Moltbook handle set" in result["error"]
 
@@ -109,13 +101,9 @@ async def test_verify_invalid_url(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
-    result = await verify_moltbook_post(
-        db_session,
-        agent,
-        "https://example.com/not-moltbook"
-    )
-    
+
+    result = await verify_moltbook_post(db_session, agent, "https://example.com/not-moltbook")
+
     assert result["success"] is False
     assert "Invalid Moltbook post URL" in result["error"]
 
@@ -135,16 +123,14 @@ async def test_verify_post_not_found(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = None
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/nonexistent"
+            db_session, agent, "https://www.moltbook.com/post/nonexistent"
         )
-        
+
         assert result["success"] is False
         assert "Post not found" in result["error"]
 
@@ -164,21 +150,19 @@ async def test_verify_author_mismatch(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "different_user"},
         "content": "some content with ref-test",
     }
-    
+
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is False
         assert "doesn't match your Moltbook handle" in result["error"]
 
@@ -198,21 +182,19 @@ async def test_verify_missing_referral_code(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "some content without the code",
     }
-    
+
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is False
         assert "doesn't contain your referral code" in result["error"]
 
@@ -232,30 +214,30 @@ async def test_verify_success_verified_tier(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 250  # Verified tier
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is True
         assert result["verified"] is True
         assert result["karma"] == 250
         assert result["tier"] == "Verified"
         assert result["bonus_credits"] == 100
         assert result["total_credits"] == 200  # 100 base + 100 bonus
-        
+
         # Check agent was updated
         await db_session.refresh(agent)
         assert agent.verified is True
@@ -279,23 +261,23 @@ async def test_verify_success_premium_tier(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 600  # Premium tier
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is True
         assert result["karma"] == 600
         assert result["tier"] == "Premium"
@@ -318,23 +300,23 @@ async def test_verify_success_elite_tier(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 1500  # Elite tier
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is True
         assert result["karma"] == 1500
         assert result["tier"] == "Elite"
@@ -357,23 +339,23 @@ async def test_verify_case_insensitive_author(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},  # lowercase
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 200
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is True  # Should match despite case difference
 
 
@@ -392,23 +374,23 @@ async def test_verify_karma_fetch_fails(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = None  # API failure
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is False
         assert "Failed to fetch your karma" in result["error"]
 
@@ -428,23 +410,23 @@ async def test_verify_below_threshold(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
     }
-    
-    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
-         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+
+    with (
+        patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch,
+        patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma,
+    ):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 50  # Below threshold
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is False
         assert "requires at least 100 karma" in result["error"]
         assert result["karma"] == 50
@@ -465,21 +447,19 @@ async def test_verify_referral_substring_no_match(db_session):
     )
     db_session.add(agent)
     await db_session.commit()
-    
+
     # Post contains ref-abc12345 which CONTAINS ref-abc123 but shouldn't match
     mock_post = {
         "author": {"name": "testuser"},
         "content": "Join Pinchwork! curl ... 'referral': 'ref-abc12345' ...",
     }
-    
+
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
-        
+
         result = await verify_moltbook_post(
-            db_session,
-            agent,
-            "https://www.moltbook.com/post/test-id"
+            db_session, agent, "https://www.moltbook.com/post/test-id"
         )
-        
+
         assert result["success"] is False
         assert "doesn't contain your referral code" in result["error"]
