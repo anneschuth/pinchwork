@@ -163,9 +163,9 @@ def get_tier_badge(verified: bool, karma: int | None) -> str:
 
     tier = get_verification_tier(karma)
     badges = {
-        "elite": "⭐ ELITE",
-        "premium": "✨ PREMIUM",
-        "verified": "✓ Verified",
+        "Elite": "⭐ ELITE",
+        "Premium": "✨ PREMIUM",
+        "Verified": "✓ Verified",
     }
 
     return badges.get(tier, "")

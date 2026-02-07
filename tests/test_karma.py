@@ -12,14 +12,14 @@ from pinchwork.karma import (
 
 def test_verification_tiers():
     """Test tier calculation based on karma."""
-    assert get_verification_tier(50) == "unverified"
-    assert get_verification_tier(99) == "unverified"
-    assert get_verification_tier(100) == "verified"
-    assert get_verification_tier(250) == "verified"
-    assert get_verification_tier(500) == "premium"
-    assert get_verification_tier(750) == "premium"
-    assert get_verification_tier(1000) == "elite"
-    assert get_verification_tier(5000) == "elite"
+    assert get_verification_tier(50) == "Unverified"
+    assert get_verification_tier(99) == "Unverified"
+    assert get_verification_tier(100) == "Verified"
+    assert get_verification_tier(250) == "Verified"
+    assert get_verification_tier(500) == "Premium"
+    assert get_verification_tier(750) == "Premium"
+    assert get_verification_tier(1000) == "Elite"
+    assert get_verification_tier(5000) == "Elite"
 
 
 def test_bonus_credits():
