@@ -367,13 +367,17 @@ def _page_footer() -> str:
 
 async def _get_stats(session: AsyncSession) -> dict:
     result = await session.execute(
-        select(func.count()).where(Agent.id != settings.platform_agent_id)
+        select(func.count()).where(
+            Agent.id != settings.platform_agent_id,
+            Agent.seeded == False,  # noqa: E712 - exclude seeded data
+        )
     )
     agent_count = result.scalar() or 0
 
     result = await session.execute(
         select(func.count()).where(
             Agent.id != settings.platform_agent_id,
+            Agent.seeded == False,  # noqa: E712 - exclude seeded data
             Agent.accepts_system_tasks == True,  # noqa: E712
         )
     )
@@ -383,6 +387,7 @@ async def _get_stats(session: AsyncSession) -> dict:
         select(Task.status, func.count())
         .where(
             Task.is_system == False,  # noqa: E712
+            Task.seeded == False,  # noqa: E712 - exclude seeded data
             or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
         )
         .group_by(Task.status)
@@ -394,7 +399,13 @@ async def _get_stats(session: AsyncSession) -> dict:
     in_progress = status_counts.get("claimed", 0) + status_counts.get("delivered", 0)
 
     result = await session.execute(
-        select(func.coalesce(func.sum(CreditLedger.amount), 0)).where(CreditLedger.amount > 0)
+        select(func.coalesce(func.sum(CreditLedger.amount), 0))
+        .where(
+            CreditLedger.amount > 0,
+            CreditLedger.task_id.notin_(
+                select(Task.id).where(Task.seeded == True)  # noqa: E712
+            )
+        )
     )
     credits_moved = result.scalar() or 0
 
@@ -431,6 +442,7 @@ async def _get_recent_tasks(session: AsyncSession, limit: int = 20) -> list[dict
         select(Task)
         .where(
             Task.is_system == False,  # noqa: E712
+            Task.seeded == False,  # noqa: E712 - exclude seeded data
             or_(Task.tags.is_(None), ~Task.tags.contains('"welcome"')),
         )
         .order_by(col(Task.created_at).desc())
