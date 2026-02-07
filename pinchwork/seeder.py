@@ -13,6 +13,7 @@ import json
 import logging
 import random
 import secrets
+from collections import deque
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -34,6 +35,9 @@ _seeder_status = {
     "errors": 0,
     "last_error": None,
 }
+
+# Track recently used templates to avoid duplicates (last 5 templates)
+_recent_templates = deque(maxlen=5)
 
 
 def get_seeder_status() -> dict:
@@ -851,7 +855,14 @@ def create_seeded_task(db, agent_ids: list[str]) -> None:
         logger.warning(f"Insufficient agents ({len(agent_ids)}), need at least 2")
         return
 
-    template = random.choice(ALL_TEMPLATES)
+    # Avoid duplicate templates by filtering out recently used ones
+    available_templates = [t for t in ALL_TEMPLATES if t["need"] not in _recent_templates]
+    # Fallback to full list if all templates were recently used
+    if not available_templates:
+        available_templates = ALL_TEMPLATES
+
+    template = random.choice(available_templates)
+    _recent_templates.append(template["need"])  # Track this template
 
     min_credits, max_credits = template["credits_range"]
     max_credits_amount = random.randint(min_credits, max_credits)
