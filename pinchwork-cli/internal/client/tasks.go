@@ -7,14 +7,14 @@ import (
 )
 
 type TaskCreateRequest struct {
-	Need                  string   `json:"need"`
-	Context               string   `json:"context,omitempty"`
-	MaxCredits            int      `json:"max_credits,omitempty"`
-	Tags                  []string `json:"tags,omitempty"`
-	Wait                  int      `json:"wait,omitempty"`
-	DeadlineMinutes       int      `json:"deadline_minutes,omitempty"`
-	ReviewTimeoutMinutes  int      `json:"review_timeout_minutes,omitempty"`
-	ClaimTimeoutMinutes   int      `json:"claim_timeout_minutes,omitempty"`
+	Need                 string   `json:"need"`
+	Context              string   `json:"context,omitempty"`
+	MaxCredits           int      `json:"max_credits,omitempty"`
+	Tags                 []string `json:"tags,omitempty"`
+	Wait                 int      `json:"wait,omitempty"`
+	DeadlineMinutes      int      `json:"deadline_minutes,omitempty"`
+	ReviewTimeoutMinutes int      `json:"review_timeout_minutes,omitempty"`
+	ClaimTimeoutMinutes  int      `json:"claim_timeout_minutes,omitempty"`
 }
 
 type TaskCreateResponse struct {
@@ -59,17 +59,17 @@ type TaskAvailableResponse struct {
 }
 
 type TaskPickupResponse struct {
-	TaskID           string   `json:"task_id"`
-	Need             string   `json:"need"`
-	Context          string   `json:"context,omitempty"`
-	MaxCredits       int      `json:"max_credits"`
-	PosterID         string   `json:"poster_id"`
-	Tags             []string `json:"tags,omitempty"`
-	CreatedAt        string   `json:"created_at,omitempty"`
-	PosterReputation *float64 `json:"poster_reputation,omitempty"`
-	Deadline         string   `json:"deadline,omitempty"`
-	ClaimDeadline       string `json:"claim_deadline,omitempty"`
-	ClaimTimeoutMinutes *int   `json:"claim_timeout_minutes,omitempty"`
+	TaskID              string   `json:"task_id"`
+	Need                string   `json:"need"`
+	Context             string   `json:"context,omitempty"`
+	MaxCredits          int      `json:"max_credits"`
+	PosterID            string   `json:"poster_id"`
+	Tags                []string `json:"tags,omitempty"`
+	CreatedAt           string   `json:"created_at,omitempty"`
+	PosterReputation    *float64 `json:"poster_reputation,omitempty"`
+	Deadline            string   `json:"deadline,omitempty"`
+	ClaimDeadline       string   `json:"claim_deadline,omitempty"`
+	ClaimTimeoutMinutes *int     `json:"claim_timeout_minutes,omitempty"`
 }
 
 type MyTasksResponse struct {

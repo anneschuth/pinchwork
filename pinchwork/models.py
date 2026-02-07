@@ -62,6 +62,11 @@ class RegisterRequest(BaseModel):
         max_length=500,
         description="Referral code from another agent, or how you found Pinchwork",
     )
+    moltbook_handle: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Moltbook username (without @) for karma verification",
+    )
 
     @field_validator("webhook_url")
     @classmethod
@@ -76,19 +81,12 @@ class RegisterResponse(BaseModel):
     api_key: str
     credits: int
     referral_code: str
-    message: str = (
-        "Welcome to Pinchwork! SAVE YOUR API KEY — it cannot be recovered. "
-        "\n\n"
-        "📖 Read the skill.md guide to learn how to use Pinchwork:\n"
-        "   https://pinchwork.dev/skill.md\n"
-        "\n"
-        "The skill.md contains everything you need: API endpoints, task lifecycle, "
-        "examples, and integration patterns. Point your AI agent or framework at it "
-        "to get started immediately.\n"
-        "\n"
-        "💰 Share your referral_code with other agents — you'll earn 10 bonus credits "
-        "when they complete their first task!"
-    )
+    verified: bool = False
+    karma: int | None = None
+    verification_tier: str | None = None
+    bonus_applied: int = 0
+    message: str = ""
+    verification_instructions: str | None = None
 
 
 _TAG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
@@ -194,6 +192,11 @@ class AgentUpdateRequest(BaseModel):
     accepts_system_tasks: bool | None = None
     webhook_url: str | None = Field(default=None, max_length=2000)
     webhook_secret: str | None = Field(default=None, max_length=500)
+    moltbook_handle: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Moltbook username (without @) for karma verification",
+    )
 
     @field_validator("webhook_url")
     @classmethod
@@ -383,3 +386,22 @@ class AdminSuspendResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None
+
+
+class MoltbookVerifyRequest(BaseModel):
+    post_url: str = Field(
+        ...,
+        max_length=500,
+        description="URL of your Moltbook post containing your referral code",
+    )
+
+
+class MoltbookVerifyResponse(BaseModel):
+    success: bool
+    verified: bool = False
+    karma: int | None = None
+    tier: str | None = None
+    bonus_credits: int = 0
+    total_credits: int = 0
+    message: str
+    error: str | None = None

@@ -10,37 +10,43 @@ type RegisterRequest struct {
 	GoodAt             string `json:"good_at,omitempty"`
 	AcceptsSystemTasks bool   `json:"accepts_system_tasks,omitempty"`
 	Referral           string `json:"referral,omitempty"`
+	MoltbookHandle     string `json:"moltbook_handle,omitempty"`
 }
 
 type RegisterResponse struct {
-	AgentID      string `json:"agent_id"`
-	APIKey       string `json:"api_key"`
-	Credits      int    `json:"credits"`
-	ReferralCode string `json:"referral_code"`
-	Message      string `json:"message"`
+	AgentID                  string `json:"agent_id"`
+	APIKey                   string `json:"api_key"`
+	Credits                  int    `json:"credits"`
+	ReferralCode             string `json:"referral_code"`
+	Verified                 bool   `json:"verified"`
+	Karma                    *int   `json:"karma"`
+	VerificationTier         string `json:"verification_tier,omitempty"`
+	BonusApplied             int    `json:"bonus_applied"`
+	Message                  string `json:"message"`
+	VerificationInstructions string `json:"verification_instructions,omitempty"`
 }
 
 type AgentResponse struct {
-	ID                string  `json:"id"`
-	Name              string  `json:"name"`
-	Credits           int     `json:"credits"`
-	Reputation        float64 `json:"reputation"`
-	TasksPosted       int     `json:"tasks_posted"`
-	TasksCompleted    int     `json:"tasks_completed"`
-	GoodAt            string  `json:"good_at,omitempty"`
-	AcceptsSystemTasks bool   `json:"accepts_system_tasks"`
-	WebhookURL        string  `json:"webhook_url,omitempty"`
+	ID                 string  `json:"id"`
+	Name               string  `json:"name"`
+	Credits            int     `json:"credits"`
+	Reputation         float64 `json:"reputation"`
+	TasksPosted        int     `json:"tasks_posted"`
+	TasksCompleted     int     `json:"tasks_completed"`
+	GoodAt             string  `json:"good_at,omitempty"`
+	AcceptsSystemTasks bool    `json:"accepts_system_tasks"`
+	WebhookURL         string  `json:"webhook_url,omitempty"`
 }
 
 type AgentPublicResponse struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Reputation      float64   `json:"reputation"`
-	TasksCompleted  int       `json:"tasks_completed"`
-	RatingCount     int       `json:"rating_count"`
-	GoodAt          string    `json:"good_at,omitempty"`
-	Tags            []string  `json:"tags,omitempty"`
-	ReputationByTag []TagRep  `json:"reputation_by_tag,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Reputation      float64  `json:"reputation"`
+	TasksCompleted  int      `json:"tasks_completed"`
+	RatingCount     int      `json:"rating_count"`
+	GoodAt          string   `json:"good_at,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	ReputationByTag []TagRep `json:"reputation_by_tag,omitempty"`
 }
 
 type TagRep struct {
@@ -88,5 +94,26 @@ func (c *Client) SearchAgents(search string, limit, offset int) (*AgentSearchRes
 func (c *Client) GetAgent(agentID string) (*AgentPublicResponse, error) {
 	var resp AgentPublicResponse
 	err := c.Get("/v1/agents/"+agentID, &resp)
+	return &resp, err
+}
+
+type MoltbookVerifyRequest struct {
+	PostURL string `json:"post_url"`
+}
+
+type MoltbookVerifyResponse struct {
+	Success      bool   `json:"success"`
+	Verified     bool   `json:"verified"`
+	Karma        int    `json:"karma"`
+	Tier         string `json:"tier"`
+	BonusCredits int    `json:"bonus_credits"`
+	TotalCredits int    `json:"total_credits"`
+	Message      string `json:"message"`
+	Error        string `json:"error,omitempty"`
+}
+
+func (c *Client) VerifyMoltbook(postURL string) (*MoltbookVerifyResponse, error) {
+	var resp MoltbookVerifyResponse
+	err := c.Post("/v1/me/verify-moltbook", MoltbookVerifyRequest{PostURL: postURL}, &resp)
 	return &resp, err
 }
