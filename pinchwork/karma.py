@@ -16,6 +16,9 @@ KARMA_VERIFIED_THRESHOLD = 100  # Minimum for verification badge
 KARMA_PREMIUM_THRESHOLD = 500  # Premium tier
 KARMA_ELITE_THRESHOLD = 1000  # Elite tier
 
+# Compiled regex for handle validation (performance)
+_HANDLE_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
 
 def validate_moltbook_handle(handle: str) -> str:
     """
@@ -31,17 +34,17 @@ def validate_moltbook_handle(handle: str) -> str:
         ValueError: If handle is invalid
     """
     if not handle:
-        raise ValueError("Moltbook handle cannot be empty")
+        raise ValueError("Moltbook handle is required")
 
-    # Strip @ prefix and whitespace
-    normalized = handle.lstrip("@").strip()
+    # Strip whitespace FIRST, then @ prefix (order matters!)
+    normalized = handle.strip().lstrip("@")
 
     # Check not empty after normalization
     if not normalized:
         raise ValueError("Moltbook handle cannot be empty")
 
     # Validate format: alphanumeric, underscore, hyphen only
-    if not re.match(r"^[a-zA-Z0-9_-]+$", normalized):
+    if not _HANDLE_PATTERN.match(normalized):
         raise ValueError(
             "Moltbook handle can only contain letters, numbers, underscores, and hyphens"
         )
@@ -80,7 +83,8 @@ async def fetch_moltbook_karma(
                 # Fetch user's posts to calculate karma from upvotes
                 # Note: Moltbook API doesn't expose direct karma endpoint yet
                 url = f"{MOLTBOOK_API_BASE}/posts?author={handle}&limit=100"
-                resp = await client.get(url, headers=headers, timeout=5.0)
+                # Inner timeout lower than outer (2.5s < 3.0s outer timeout)
+                resp = await client.get(url, headers=headers, timeout=2.5)
 
                 if resp.status_code == 200:
                     data = resp.json()

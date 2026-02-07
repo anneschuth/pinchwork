@@ -7,7 +7,6 @@ Create Date: 2026-02-07 12:34:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from datetime import datetime
 
 # revision identifiers
 revision = '007'
@@ -26,13 +25,13 @@ def upgrade():
     # Add unique constraint and index on moltbook_handle
     # Unique constraint prevents one Moltbook account from being linked to multiple Pinchwork agents
     # Partial index (WHERE moltbook_handle IS NOT NULL) allows multiple NULL values
+    # Note: SQLite 3.8.0+ allows multiple NULLs in unique indexes by default
     op.create_index(
         'ix_agents_moltbook_handle_unique',
         'agents',
         ['moltbook_handle'],
         unique=True,
-        postgresql_where=sa.text('moltbook_handle IS NOT NULL'),
-        sqlite_where=sa.text('moltbook_handle IS NOT NULL')
+        postgresql_where=sa.text('moltbook_handle IS NOT NULL')
     )
 
 

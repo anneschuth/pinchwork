@@ -49,6 +49,7 @@ def test_validate_handle_valid():
     assert validate_moltbook_handle("pinch") == "pinch"
     assert validate_moltbook_handle("@pinch") == "pinch"
     assert validate_moltbook_handle("  @pinch  ") == "pinch"
+    assert validate_moltbook_handle("  @@@pinch  ") == "pinch"  # Multiple @ with spaces
     assert validate_moltbook_handle("test_user") == "test_user"
     assert validate_moltbook_handle("user-123") == "user-123"
     assert validate_moltbook_handle("Agent_99") == "Agent_99"

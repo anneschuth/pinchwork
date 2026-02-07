@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -61,48 +62,40 @@ async def register(
     karma_verified_at: datetime | None = None
 
     if moltbook_handle:
-        try:
-            # Validate and normalize handle
-            moltbook_handle = validate_moltbook_handle(moltbook_handle)
+        # Validate and normalize handle (raises ValueError if invalid)
+        moltbook_handle = validate_moltbook_handle(moltbook_handle)
 
-            # Check if handle is already claimed by another agent
-            existing = await session.execute(
-                select(Agent).where(Agent.moltbook_handle == moltbook_handle)
-            )
-            if existing.scalar_one_or_none():
-                logger.warning(
-                    f"Moltbook handle @{moltbook_handle} already claimed by another agent"
-                )
-                raise ValueError(
-                    f"Moltbook handle @{moltbook_handle} is already registered. "
-                    "Each Moltbook account can only be linked to one Pinchwork agent."
-                )
-
-            # Fetch karma from Moltbook
-            karma = await fetch_moltbook_karma(
-                moltbook_handle, api_key=settings.moltbook_api_key
+        # Check if handle is already claimed by another agent
+        existing = await session.execute(
+            select(Agent).where(Agent.moltbook_handle == moltbook_handle)
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError(
+                f"Moltbook handle @{moltbook_handle} is already registered. "
+                "Each Moltbook account can only be linked to one Pinchwork agent."
             )
 
-            if karma is not None and karma >= 100:
-                verified = True
-                bonus_credits = get_bonus_credits(karma)
-                karma_verified_at = datetime.now(UTC)
-                logger.info(
-                    f"Agent {name} verified with {karma} karma "
-                    f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
-                )
-            elif karma is not None:
-                logger.info(
-                    f"Agent {name} has {karma} karma (below verification threshold)"
-                )
-            else:
-                logger.warning(
-                    f"Could not fetch karma for @{moltbook_handle} (API unavailable or user not found)"
-                )
+        # Fetch karma from Moltbook
+        karma = await fetch_moltbook_karma(
+            moltbook_handle, api_key=settings.moltbook_api_key
+        )
 
-        except ValueError as e:
-            # Re-raise validation errors
-            raise e
+        if karma is not None and karma >= 100:
+            verified = True
+            bonus_credits = get_bonus_credits(karma)
+            karma_verified_at = datetime.now(UTC)
+            logger.info(
+                f"Agent {name} verified with {karma} karma "
+                f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
+            )
+        elif karma is not None:
+            logger.info(
+                f"Agent {name} has {karma} karma (below verification threshold)"
+            )
+        else:
+            logger.warning(
+                f"Could not fetch karma for @{moltbook_handle} (API unavailable or user not found)"
+            )
 
     total_credits = settings.initial_credits + bonus_credits
 
@@ -144,7 +137,17 @@ async def register(
         except Exception:
             logger.warning("Failed to create welcome task for %s", aid, exc_info=True)
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as e:
+        # Handle race condition: another request claimed the moltbook_handle
+        if moltbook_handle and "moltbook_handle" in str(e).lower():
+            raise ValueError(
+                f"Moltbook handle @{moltbook_handle} is already registered. "
+                "Each Moltbook account can only be linked to one Pinchwork agent."
+            )
+        # Re-raise if it's a different integrity error
+        raise
 
     return {
         "agent_id": aid,
