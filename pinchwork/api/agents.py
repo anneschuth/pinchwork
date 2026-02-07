@@ -259,6 +259,9 @@ async def verify_moltbook(
             request,
             MoltbookVerifyResponse(
                 success=False,
+                verified=result.get("verified", False),
+                karma=result.get("karma"),
+                tier=result.get("tier"),
                 error=result.get("error", "Verification failed"),
                 message=result.get("error", "Verification failed"),
             ),
