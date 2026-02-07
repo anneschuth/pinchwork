@@ -612,14 +612,14 @@ async def drip_seeder_loop():
                 # Ensure agent pool exists (fix #11: idempotency)
                 agent_ids = ensure_seeded_agents(db)
 
-                # Calculate tasks to create based on time of day
+                # Calculate tasks to create based on time of day (CET aligned)
                 hour = datetime.utcnow().hour
 
-                if 9 <= hour < 18:
+                if 7 <= hour < 21:  # 8-22 CET (extended business day)
                     lambda_rate = settings.seed_drip_rate_business
-                elif 18 <= hour < 23:
+                elif 21 <= hour < 23:  # 22-24 CET (short evening)
                     lambda_rate = settings.seed_drip_rate_evening
-                else:
+                else:  # 0-8 CET (night)
                     lambda_rate = settings.seed_drip_rate_night
 
                 # Poisson sample for 10-minute interval (capped at 10 to prevent outliers)
