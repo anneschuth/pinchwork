@@ -38,7 +38,10 @@ _seeder_status = {
 
 def get_seeder_status() -> dict:
     """Return seeder health status for /health endpoint."""
-    return _seeder_status.copy()
+    status = _seeder_status.copy()
+    # Always read live config value, not cached status
+    status["enabled"] = settings.seed_marketplace_drip
+    return status
 
 
 # Agent personas (50 total)
@@ -594,7 +597,6 @@ async def drip_seeder_loop():
         db.close()
 
     logger.info("🦞 Marketplace seeder started (drip mode)")
-    _seeder_status["enabled"] = True
 
     reputation_update_counter = 0
 
