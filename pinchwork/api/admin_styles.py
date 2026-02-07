@@ -214,6 +214,22 @@ ADMIN_CSS = """\
   .status-delivered { color: #a855f7; }
   .status-approved { color: #22c55e; }
   .status-expired, .status-cancelled { color: #666; }
+  .alert {
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    border-radius: 4px;
+    font-size: 10pt;
+  }
+  .alert-success {
+    background: #1a5e2e;
+    color: #22c55e;
+    border-left: 3px solid #22c55e;
+  }
+  .alert-error {
+    background: #5e1a1a;
+    color: #ff4d4d;
+    border-left: 3px solid #ff4d4d;
+  }
   @media (max-width: 600px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     td:nth-child(n+5) { display: none; }
