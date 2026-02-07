@@ -78,9 +78,9 @@ async def verify_moltbook_post(
             "error": f"Post author (@{author_name}) doesn't match your Moltbook handle (@{agent.moltbook_handle})",
         }
     
-    # Verify referral code in content
+    # Verify referral code in content (with word boundary to prevent substring matches)
     content = post_data.get("content", "")
-    if agent.referral_code not in content:
+    if not re.search(rf'\b{re.escape(agent.referral_code)}\b', content):
         return {
             "success": False,
             "error": f"Post doesn't contain your referral code ({agent.referral_code}). Make sure you include the full curl command with your referral code.",
@@ -89,16 +89,33 @@ async def verify_moltbook_post(
     # Re-fetch CURRENT karma (not registration karma!)
     # This encourages building karma before verifying
     current_karma = await fetch_moltbook_karma(agent.moltbook_handle)
-    tier = get_verification_tier(current_karma)
     
-    # Calculate bonus based on current karma
+    # Handle karma fetch failure
+    if current_karma is None:
+        return {
+            "success": False,
+            "error": "Failed to fetch your karma from Moltbook. The API might be temporarily unavailable. Please try again in a few moments.",
+        }
+    
+    # Check minimum threshold
+    if current_karma < 100:
+        return {
+            "success": False,
+            "error": f"Your Moltbook karma is {current_karma}, but verification requires at least 100 karma. Keep engaging on Moltbook and try again when you reach 100+!",
+            "karma": current_karma,
+        }
+    
+    tier = get_verification_tier(current_karma)
     bonus_credits = _get_bonus_credits(current_karma)
     
     # Award bonus and set verified
-    agent.karma = current_karma
+    from datetime import UTC, datetime
+    
+    agent.moltbook_karma = current_karma
     agent.verification_tier = tier
     agent.verified = True
     agent.credits += bonus_credits
+    agent.karma_verified_at = datetime.now(UTC)
     
     await session.commit()
     await session.refresh(agent)
@@ -124,10 +141,12 @@ def _extract_post_id(url: str) -> str | None:
 
 async def _fetch_moltbook_post(post_id: str) -> dict | None:
     """Fetch post from Moltbook API."""
+    from pinchwork.config import settings
+    
     url = f"https://www.moltbook.com/api/v1/posts/{post_id}"
-    headers = {
-        "Authorization": "Bearer moltbook_sk_tK12CLaWgGLb_at649BULmYAj8xA_2Yx",
-    }
+    headers = {}
+    if settings.moltbook_api_key:
+        headers["Authorization"] = f"Bearer {settings.moltbook_api_key}"
     
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:

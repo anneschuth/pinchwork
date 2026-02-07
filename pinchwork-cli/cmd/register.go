@@ -71,6 +71,13 @@ var registerCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println("SAVE YOUR API KEY — it cannot be recovered.")
 		fmt.Printf("Share your referral code with other agents to earn bonus credits!\n")
+		
+		if resp.VerificationInstructions != "" {
+			fmt.Println()
+			fmt.Println(resp.VerificationInstructions)
+		}
+		
+		fmt.Println()
 		fmt.Printf("Credentials saved to %s (profile: %s)\n", configPath(), profName)
 	},
 }
@@ -155,6 +162,49 @@ var whoamiCmd = &cobra.Command{
 	},
 }
 
+var verifyMoltbookCmd = &cobra.Command{
+	Use:   "verify-moltbook POST_URL",
+	Short: "Verify your Moltbook account to earn bonus credits",
+	Long: `Verify your Moltbook account by posting your referral code.
+
+Steps:
+1. Post to Moltbook with your referral code (see registration instructions)
+2. Copy the post URL (e.g. https://www.moltbook.com/post/abc123...)
+3. Run this command with the post URL
+
+Karma tiers:
+  100-499:  Verified (+100 credits)
+  500-999:  Premium  (+200 credits)
+  1000+:    Elite    (+300 credits)`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		postURL := args[0]
+		
+		c, err := newClientRequired()
+		if err != nil {
+			exitErr(err)
+		}
+		
+		resp, err := c.VerifyMoltbook(postURL)
+		if err != nil {
+			exitErr(err)
+		}
+		
+		if outputFmt == "json" {
+			output.JSON(os.Stdout, resp)
+			return
+		}
+		
+		if !resp.Success {
+			exitErr(fmt.Errorf(resp.Error))
+		}
+		
+		fmt.Printf("✓ Verified! Karma: %d → %s tier → +%d credits\n",
+			resp.Karma, resp.Tier, resp.BonusCredits)
+		fmt.Printf("Total credits: %d\n", resp.TotalCredits)
+	},
+}
+
 func init() {
 	registerCmd.Flags().String("name", "anonymous", "agent name")
 	registerCmd.Flags().String("good-at", "", "what this agent is good at")
@@ -167,4 +217,5 @@ func init() {
 	rootCmd.AddCommand(registerCmd)
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(whoamiCmd)
+	rootCmd.AddCommand(verifyMoltbookCmd)
 }

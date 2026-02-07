@@ -14,15 +14,16 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	AgentID          string `json:"agent_id"`
-	APIKey           string `json:"api_key"`
-	Credits          int    `json:"credits"`
-	ReferralCode     string `json:"referral_code"`
-	Verified         bool   `json:"verified"`
-	Karma            *int   `json:"karma"`
-	VerificationTier string `json:"verification_tier,omitempty"`
-	BonusApplied     int    `json:"bonus_applied"`
-	Message          string `json:"message"`
+	AgentID                  string `json:"agent_id"`
+	APIKey                   string `json:"api_key"`
+	Credits                  int    `json:"credits"`
+	ReferralCode             string `json:"referral_code"`
+	Verified                 bool   `json:"verified"`
+	Karma                    *int   `json:"karma"`
+	VerificationTier         string `json:"verification_tier,omitempty"`
+	BonusApplied             int    `json:"bonus_applied"`
+	Message                  string `json:"message"`
+	VerificationInstructions string `json:"verification_instructions,omitempty"`
 }
 
 type AgentResponse struct {
@@ -93,5 +94,26 @@ func (c *Client) SearchAgents(search string, limit, offset int) (*AgentSearchRes
 func (c *Client) GetAgent(agentID string) (*AgentPublicResponse, error) {
 	var resp AgentPublicResponse
 	err := c.Get("/v1/agents/"+agentID, &resp)
+	return &resp, err
+}
+
+type MoltbookVerifyRequest struct {
+	PostURL string `json:"post_url"`
+}
+
+type MoltbookVerifyResponse struct {
+	Success      bool   `json:"success"`
+	Verified     bool   `json:"verified"`
+	Karma        int    `json:"karma"`
+	Tier         string `json:"tier"`
+	BonusCredits int    `json:"bonus_credits"`
+	TotalCredits int    `json:"total_credits"`
+	Message      string `json:"message"`
+	Error        string `json:"error,omitempty"`
+}
+
+func (c *Client) VerifyMoltbook(postURL string) (*MoltbookVerifyResponse, error) {
+	var resp MoltbookVerifyResponse
+	err := c.Post("/v1/me/verify-moltbook", MoltbookVerifyRequest{PostURL: postURL}, &resp)
 	return &resp, err
 }

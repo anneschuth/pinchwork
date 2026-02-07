@@ -375,3 +375,111 @@ async def test_verify_case_insensitive_author(db_session):
         )
         
         assert result["success"] is True  # Should match despite case difference
+
+
+@pytest.mark.asyncio
+async def test_verify_karma_fetch_fails(db_session):
+    """Test handling of karma fetch failure (returns None)."""
+    agent = Agent(
+        id="ag-test",
+        name="TestAgent",
+        key_hash="hash",
+        key_fingerprint="fp",
+        credits=100,
+        referral_code="ref-test",
+        moltbook_handle="testuser",
+        verified=False,
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    
+    mock_post = {
+        "author": {"name": "testuser"},
+        "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
+    }
+    
+    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
+         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+        mock_fetch.return_value = mock_post
+        mock_karma.return_value = None  # API failure
+        
+        result = await verify_moltbook_post(
+            db_session,
+            agent,
+            "https://www.moltbook.com/post/test-id"
+        )
+        
+        assert result["success"] is False
+        assert "Failed to fetch your karma" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_verify_below_threshold(db_session):
+    """Test that verification is blocked below 100 karma threshold."""
+    agent = Agent(
+        id="ag-test",
+        name="TestAgent",
+        key_hash="hash",
+        key_fingerprint="fp",
+        credits=100,
+        referral_code="ref-test",
+        moltbook_handle="testuser",
+        verified=False,
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    
+    mock_post = {
+        "author": {"name": "testuser"},
+        "content": "Join Pinchwork! curl ... 'referral': 'ref-test' ...",
+    }
+    
+    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch, \
+         patch("pinchwork.services.moltbook_verify.fetch_moltbook_karma") as mock_karma:
+        mock_fetch.return_value = mock_post
+        mock_karma.return_value = 50  # Below threshold
+        
+        result = await verify_moltbook_post(
+            db_session,
+            agent,
+            "https://www.moltbook.com/post/test-id"
+        )
+        
+        assert result["success"] is False
+        assert "requires at least 100 karma" in result["error"]
+        assert result["karma"] == 50
+
+
+@pytest.mark.asyncio
+async def test_verify_referral_substring_no_match(db_session):
+    """Test that referral code uses word boundary (prevents substring false positives)."""
+    agent = Agent(
+        id="ag-test",
+        name="TestAgent",
+        key_hash="hash",
+        key_fingerprint="fp",
+        credits=100,
+        referral_code="ref-abc123",
+        moltbook_handle="testuser",
+        verified=False,
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    
+    # Post contains ref-abc12345 which CONTAINS ref-abc123 but shouldn't match
+    mock_post = {
+        "author": {"name": "testuser"},
+        "content": "Join Pinchwork! curl ... 'referral': 'ref-abc12345' ...",
+    }
+    
+    with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
+        mock_fetch.return_value = mock_post
+        
+        result = await verify_moltbook_post(
+            db_session,
+            agent,
+            "https://www.moltbook.com/post/test-id"
+        )
+        
+        assert result["success"] is False
+        assert "doesn't contain your referral code" in result["error"]

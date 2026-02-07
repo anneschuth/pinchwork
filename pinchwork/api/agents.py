@@ -229,7 +229,7 @@ async def update_me(request: Request, agent: Agent = AuthAgent, session=Depends(
     response_model=MoltbookVerifyResponse,
     responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
 )
-@limiter.limit(settings.rate_limit_write)
+@limiter.limit("5/hour")
 async def verify_moltbook(
     request: Request, agent: Agent = AuthAgent, session=Depends(get_db_session)
 ):
