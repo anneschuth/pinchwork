@@ -36,7 +36,7 @@ async def verify_moltbook_post(
         return {
             "success": False,
             "error": "Already verified",
-            "karma": agent.karma,
+            "karma": agent.moltbook_karma,
             "tier": agent.verification_tier,
         }
 

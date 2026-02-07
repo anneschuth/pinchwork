@@ -247,7 +247,7 @@ async def test_verify_success_verified_tier(db):
             assert result["total_credits"] == 200  # 100 base + 100 bonus
 
             # Check agent was updated
-            await db.refresh(agent)
+            await session.refresh(agent)
             assert agent.verified is True
             assert agent.moltbook_karma == 250
             assert agent.verification_tier == "Verified"

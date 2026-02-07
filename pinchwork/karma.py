@@ -115,19 +115,19 @@ def get_verification_tier(karma: int) -> str:
     Return verification tier based on karma score.
 
     Tiers:
-    - elite: 1000+ karma
-    - premium: 500+ karma
-    - verified: 100+ karma
-    - unverified: <100 karma
+    - Elite: 1000+ karma
+    - Premium: 500+ karma
+    - Verified: 100+ karma
+    - Unverified: <100 karma
     """
     if karma >= KARMA_ELITE_THRESHOLD:
-        return "elite"
+        return "Elite"
     elif karma >= KARMA_PREMIUM_THRESHOLD:
-        return "premium"
+        return "Premium"
     elif karma >= KARMA_VERIFIED_THRESHOLD:
-        return "verified"
+        return "Verified"
     else:
-        return "unverified"
+        return "Unverified"
 
 
 def get_bonus_credits(karma: int) -> int:
