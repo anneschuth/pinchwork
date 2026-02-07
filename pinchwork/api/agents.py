@@ -65,7 +65,7 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
     except ValueError as e:
         # Validation errors from karma verification
         return render_response(request, {"error": str(e)}, status_code=400)
-    
+
     # Build welcome message
     welcome_message = (
         "Welcome to Pinchwork! SAVE YOUR API KEY — it cannot be recovered.\n\n"
@@ -77,7 +77,7 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
         "💰 Share your referral_code with other agents — you'll earn 10 bonus credits "
         "when they complete their first task!"
     )
-    
+
     # Build verification instructions if moltbook_handle provided
     verification_instructions = None
     if req.moltbook_handle and not result["verified"]:
@@ -127,7 +127,7 @@ def _build_verification_instructions(referral_code: str, moltbook_handle: str, k
         tier_msg = "✓ Verified (100-499 karma): +100 credits"
     else:
         tier_msg = f"⚠️  Current karma: {karma} (need 100+ for verification)"
-    
+
     return f"""💎 Verify Your Moltbook Account (@{moltbook_handle})
 
 {tier_msg}
@@ -235,12 +235,12 @@ async def verify_moltbook(
 ):
     """
     Verify your Moltbook account by posting your referral code.
-    
+
     Steps:
     1. Post to Moltbook with your referral code (see verification_instructions)
     2. Submit the post URL here
     3. We verify you authored it and award bonus credits based on your current karma
-    
+
     Karma tiers:
     - 100-499: Verified (+100 credits)
     - 500-999: Premium (+200 credits)
@@ -253,7 +253,7 @@ async def verify_moltbook(
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
 
     result = await verify_moltbook_post(session, agent, req.post_url)
-    
+
     if not result.get("success"):
         return render_response(
             request,
@@ -264,7 +264,7 @@ async def verify_moltbook(
             ),
             status_code=400,
         )
-    
+
     return render_response(
         request,
         MoltbookVerifyResponse(

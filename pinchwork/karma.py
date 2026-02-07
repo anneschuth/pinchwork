@@ -1,9 +1,8 @@
 """Moltbook karma verification service."""
+
 import asyncio
 import logging
 import re
-from datetime import UTC, datetime
-from typing import Optional
 
 import httpx
 
@@ -56,9 +55,7 @@ def validate_moltbook_handle(handle: str) -> str:
     return normalized
 
 
-async def fetch_moltbook_karma(
-    handle: str, api_key: str | None = None
-) -> Optional[int]:
+async def fetch_moltbook_karma(handle: str, api_key: str | None = None) -> int | None:
     """
     Fetch karma score from Moltbook API with timeout protection.
 
@@ -91,14 +88,10 @@ async def fetch_moltbook_karma(
                     posts = data.get("posts", [])
 
                     # Calculate karma: sum of (upvotes - downvotes) across all posts
-                    karma = sum(
-                        post.get("upvotes", 0) - post.get("downvotes", 0)
-                        for post in posts
-                    )
+                    karma = sum(post.get("upvotes", 0) - post.get("downvotes", 0) for post in posts)
 
                     logger.info(
-                        f"Calculated karma for @{handle}: {karma} "
-                        f"(from {len(posts)} posts)"
+                        f"Calculated karma for @{handle}: {karma} (from {len(posts)} posts)"
                     )
                     return karma
 
@@ -106,13 +99,10 @@ async def fetch_moltbook_karma(
                     logger.warning(f"Moltbook user @{handle} not found")
                     return None
                 else:
-                    logger.error(
-                        f"Failed to fetch Moltbook data for @{handle}: "
-                        f"{resp.status_code}"
-                    )
+                    logger.error(f"Failed to fetch Moltbook data for @{handle}: {resp.status_code}")
                     return None
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"Timeout fetching karma for @{handle} (>3s)")
         return None
     except Exception as e:

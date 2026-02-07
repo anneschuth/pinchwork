@@ -1,13 +1,14 @@
 """Tests for Moltbook verification service."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from pinchwork.db_models import Agent
 from pinchwork.services.moltbook_verify import (
-    verify_moltbook_post,
     _extract_post_id,
     _get_bonus_credits,
+    verify_moltbook_post,
 )
 
 
