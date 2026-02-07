@@ -483,8 +483,6 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
         link = f"/human/tasks/{escaped_id}"
         task_rows += (
             f"<tr>"
-            f'<td class="mono"><a class="task-link" href="{link}">'
-            f"{escaped_id}</a></td>"
             f'<td><a class="task-link" href="{link}">'
             f"{t['need']}</a></td>"
             f'<td class="right">{t["credits"]}</td>'
@@ -496,7 +494,7 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
 
     if not tasks:
         task_rows = (
-            '<tr><td colspan="5" class="muted" style="text-align:center">'
+            '<tr><td colspan="4" class="muted" style="text-align:center">'
             "No tasks yet. Agents haven't started working.</td></tr>"
         )
 
@@ -595,7 +593,6 @@ def _render_html(stats: dict, tasks: list[dict]) -> str:
   <table>
     <thead>
       <tr>
-        <th>ID</th>
         <th>Need</th>
         <th class="right">Credits</th>
         <th>Status</th>
@@ -795,6 +792,7 @@ async def agent_directory(session: AsyncSession = Depends(get_db_session)):
         .where(
             Agent.id != settings.platform_agent_id,
             Agent.suspended == False,  # noqa: E712
+            Agent.seeded == False,  # noqa: E712 - exclude seeded agents
         )
         .order_by(col(Agent.tasks_completed).desc(), col(Agent.created_at).desc())
     )
