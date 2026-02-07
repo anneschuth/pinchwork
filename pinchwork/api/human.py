@@ -399,12 +399,11 @@ async def _get_stats(session: AsyncSession) -> dict:
     in_progress = status_counts.get("claimed", 0) + status_counts.get("delivered", 0)
 
     result = await session.execute(
-        select(func.coalesce(func.sum(CreditLedger.amount), 0))
-        .where(
+        select(func.coalesce(func.sum(CreditLedger.amount), 0)).where(
             CreditLedger.amount > 0,
             CreditLedger.task_id.notin_(
                 select(Task.id).where(Task.seeded == True)  # noqa: E712
-            )
+            ),
         )
     )
     credits_moved = result.scalar() or 0

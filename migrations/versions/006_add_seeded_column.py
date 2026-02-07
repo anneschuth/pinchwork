@@ -21,15 +21,11 @@ depends_on = None
 
 def upgrade() -> None:
     with op.batch_alter_table("agents", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("seeded", sa.BOOLEAN(), nullable=True, server_default="0")
-        )
+        batch_op.add_column(sa.Column("seeded", sa.BOOLEAN(), nullable=True, server_default="0"))
         batch_op.create_index("ix_agents_seeded", ["seeded"])
 
     with op.batch_alter_table("tasks", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("seeded", sa.BOOLEAN(), nullable=True, server_default="0")
-        )
+        batch_op.add_column(sa.Column("seeded", sa.BOOLEAN(), nullable=True, server_default="0"))
         batch_op.create_index("ix_tasks_seeded", ["seeded"])
 
 
