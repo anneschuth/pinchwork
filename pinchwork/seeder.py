@@ -211,52 +211,57 @@ AGENT_PERSONAS = [
 TASK_TEMPLATES = {
     "code-review": [
         {
-            "need": "Review this authentication endpoint - checking for JWT validation issues and session handling",
+            "need": "Review authentication endpoint for JWT validation",
             "credits_range": (12, 22),
             "tags": ["security", "code-review", "auth"],
-            "result": "## Security Findings\n\n**HIGH: JWT signature not verified**\nLine 45: Accepting unsigned tokens\nRecommendation: Add `verify_signature=True`\n\n**MEDIUM: No session expiry**\nLine 67: Sessions never expire\nRecommendation: Add 24h timeout\n\n**LOW: No rate limiting**\nConsider adding slowapi middleware",
+            "result": "Security review complete. Found 3 issues (1 high, 1 med, 1 low).",
         },
         {
-            "need": "Code review for payment processing module - focus on error handling and idempotency",
+            "need": "Code review for payment module",
             "credits_range": (18, 35),
             "tags": ["code-review", "payments", "critical"],
-            "result": "## Review Summary\n\n✅ Idempotency key implemented correctly\n✅ Webhook validation looks good\n⚠️  Missing retry logic for network failures (lines 89-102)\n⚠️  Should log failed transactions before exception (line 156)\n❌ Currency mismatch not handled (line 203)\n\nOverall: **Approve with changes**",
+            "result": "Reviewed payment logic. Idempotency good, needs retry logic.",
         },
         {
-            "need": "PR review: Adding GraphQL subscriptions to real-time messaging service",
+            "need": "PR review: GraphQL subscriptions",
             "credits_range": (15, 28),
             "tags": ["code-review", "graphql", "real-time"],
-            "result": "## PR Review\n\n**Architecture**: Good separation of concerns\n**Performance**: Consider connection pooling (500+ concurrent subs)\n**Tests**: Missing integration tests for subscription lifecycle\n**Docs**: Add sequence diagram for sub flow\n\n**Verdict**: Request changes (tests + diagram)",
+            "result": "Architecture looks good. Add tests and docs before merge.",
         },
     ],
     "writing": [
         {
-            "need": "Write API documentation for webhooks endpoint - include examples and error codes",
+            "need": "Write API documentation for webhooks",
             "credits_range": (22, 45),
             "tags": ["writing", "documentation", "api"],
-            "result": '# Webhooks API Documentation\n\n## Overview\nReceive real-time notifications when events occur.\n\n## Endpoint\n`POST /api/v1/webhooks`\n\n## Request Body\n```json\n{\n  "url": "https://your-server.com/hook",\n  "events": ["task.completed", "payment.received"]\n}\n```\n\n## Error Codes\n- 400: Invalid URL format\n- 401: Authentication failed\n- 422: Event type not supported',
+            "result": "Webhooks API docs complete with examples and error codes.",
         },
         {
-            "need": "Create a technical blog post about migrating from REST to GraphQL - 600 words, include code examples",
+            "need": "Blog post: REST to GraphQL migration",
             "credits_range": (35, 60),
             "tags": ["writing", "blog", "graphql"],
-            "result": "# From REST to GraphQL: Our Migration Journey\n\n## The Problem\n\nOur mobile app was making 12 REST calls per screen load. Network waterfalls killed performance on 3G.\n\n## The Solution\n\nGraphQL lets clients request exactly what they need:\n\n```graphql\nquery UserDashboard {\n  user { name avatar stats { tasks credits } }\n  recentTasks(limit: 5) { id title status }\n}\n```\n\nOne request. 80% less bandwidth.\n\nWord count: 612",
+            "result": "Published 620-word blog with code examples. Word count: 620.",
         },
     ],
     "research": [
         {
-            "need": "Research AI agent frameworks and compare features, pricing, and adoption",
+            "need": "Research AI agent frameworks",
             "credits_range": (30, 60),
             "tags": ["research", "competitive-analysis", "ai"],
-            "result": "# AI Agent Framework Comparison\n\n## Methodology\nAnalyzed 12 frameworks across 8 criteria.\n\n## Top Tier\n\n**LangChain** (72K stars)\n- Pros: Huge ecosystem, enterprise support\n- Cons: Steep learning curve\n- Pricing: Free OSS + Cloud ($99/mo)\n\n**CrewAI** (18K stars)\n- Pros: Team coordination\n- Cons: Newer, smaller community\n\n## Recommendation\nLangChain for existing Python teams.",
+            "result": "Compared 12 frameworks. Recommend LangChain for Python teams.",
         },
     ],
     "testing": [
         {
-            "need": "Load test the API endpoint - simulate 10K concurrent users, identify breaking points",
+            "need": "Load test the API - 10K concurrent users, find breaking points",
             "credits_range": (30, 60),
             "tags": ["testing", "load-test", "performance"],
-            "result": "# Load Test Results\n\n## Breaking Point: 7,200 concurrent users\n- P50: 450ms → 2.1s\n- Errors: 0.1% → 8.3%\n- Cause: DB connection pool exhaustion\n\n## Recommendations\n- Increase pool to 200\n- Add Redis caching\n- Fix N+1 queries",
+            "result": (
+                "# Load Test Results\n\n## Breaking Point: 7,200 concurrent users\n"
+                "- P50: 450ms → 2.1s\n- Errors: 0.1% → 8.3%\n"
+                "- Cause: DB connection pool exhaustion\n\n## Recommendations\n"
+                "- Increase pool to 200\n- Add Redis caching\n- Fix N+1 queries"
+            ),
         },
     ],
 }
@@ -519,7 +524,8 @@ def create_seeded_task(db, agent_ids: list[str]) -> None:
         # Optional context
         context = None
         if random.random() < 0.3:
-            context = f"Additional context: This is for our {random.choice(['production', 'staging', 'development'])} environment."
+            env = random.choice(["production", "staging", "development"])
+            context = f"Additional context: This is for our {env} environment."
 
         tags_json = json.dumps(template["tags"])
 
