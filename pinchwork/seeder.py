@@ -290,10 +290,12 @@ def create_seeded_task(db, agent_ids: list[str]) -> None:
             
             # Fix #7: Actually credit platform agent
             if settings.platform_agent_id:
-                db.execute(
+                result = db.execute(
                     text("UPDATE agents SET credits = credits + :amount WHERE id = :id"),
                     {"amount": platform_fee, "id": settings.platform_agent_id}
                 )
+                if result.rowcount == 0:
+                    logger.warning(f"Platform agent {settings.platform_agent_id} not found, fee not collected")
             
             # Ledger entries
             db.add(CreditLedger(
@@ -486,8 +488,8 @@ async def drip_seeder_loop():
                 else:
                     lambda_rate = settings.seed_drip_rate_night
                 
-                # Poisson sample for 10-minute interval
-                num_tasks = np.random.poisson(lambda_rate / 6.0)
+                # Poisson sample for 10-minute interval (capped at 10 to prevent outliers)
+                num_tasks = min(np.random.poisson(lambda_rate / 6.0), 10)
                 
                 if num_tasks > 0:
                     logger.info(f"Creating {num_tasks} seeded tasks (hour={hour}, rate={lambda_rate}/h)")
