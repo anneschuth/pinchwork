@@ -76,9 +76,7 @@ async def register(
             )
 
         # Fetch karma from Moltbook
-        karma = await fetch_moltbook_karma(
-            moltbook_handle, api_key=settings.moltbook_api_key
-        )
+        karma = await fetch_moltbook_karma(moltbook_handle, api_key=settings.moltbook_api_key)
 
         if karma is not None and karma >= 100:
             verified = True
@@ -89,9 +87,7 @@ async def register(
                 f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
             )
         elif karma is not None:
-            logger.info(
-                f"Agent {name} has {karma} karma (below verification threshold)"
-            )
+            logger.info(f"Agent {name} has {karma} karma (below verification threshold)")
         else:
             logger.warning(
                 f"Could not fetch karma for @{moltbook_handle} (API unavailable or user not found)"
@@ -145,7 +141,7 @@ async def register(
             raise ValueError(
                 f"Moltbook handle @{moltbook_handle} is already registered. "
                 "Each Moltbook account can only be linked to one Pinchwork agent."
-            )
+            ) from e
         # Re-raise if it's a different integrity error
         raise
 
@@ -344,7 +340,7 @@ async def update_agent(
 ) -> dict | None:
     """Update agent capabilities and Moltbook handle."""
     from pinchwork.karma import validate_moltbook_handle
-    
+
     agent = await session.get(Agent, aid)
     if not agent:
         return None
