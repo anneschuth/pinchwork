@@ -69,6 +69,7 @@ class Agent(SQLModel, table=True):
     moltbook_karma: int | None = None  # Cached karma score
     karma_verified_at: datetime | None = None  # Last verification timestamp
     verified: bool = Field(default=False)  # Verified via Moltbook karma
+    verification_tier: str | None = None  # Verification tier (Verified/Premium/Elite)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

@@ -24,6 +24,7 @@ def upgrade():
     op.add_column(
         "agents", sa.Column("verified", sa.Boolean(), server_default="false", nullable=False)
     )
+    op.add_column("agents", sa.Column("verification_tier", sa.String(), nullable=True))
 
     # Add unique constraint and index on moltbook_handle
     # Unique constraint prevents one Moltbook account from being linked to multiple Pinchwork agents
@@ -40,6 +41,7 @@ def upgrade():
 
 def downgrade():
     op.drop_index("ix_agents_moltbook_handle_unique", table_name="agents")
+    op.drop_column("agents", "verification_tier")
     op.drop_column("agents", "verified")
     op.drop_column("agents", "karma_verified_at")
     op.drop_column("agents", "moltbook_karma")
