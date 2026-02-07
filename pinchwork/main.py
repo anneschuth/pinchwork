@@ -23,7 +23,7 @@ from pinchwork.content import render_response
 from pinchwork.database import close_db, get_session_factory, init_db
 from pinchwork.events import event_bus
 from pinchwork.rate_limit import limiter
-from pinchwork.seeder import drip_seeder_loop
+from pinchwork.seeder import drip_seeder_loop, get_seeder_status
 from pinchwork.stats_middleware import StatsMiddleware
 from pinchwork.webhooks import deliver_webhook
 
@@ -169,7 +169,11 @@ async def capabilities():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    seeder = get_seeder_status()
+    return {
+        "status": "ok",
+        "seeder": seeder,
+    }
 
 
 @app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)

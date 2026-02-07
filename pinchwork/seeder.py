@@ -17,12 +17,28 @@ from datetime import datetime, timedelta
 import numpy as np
 from nanoid import generate
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from pinchwork.config import settings
 from pinchwork.database import SessionLocal
 from pinchwork.db_models import Agent, CreditLedger, Rating, Task, TaskStatus
 
 logger = logging.getLogger(__name__)
+
+# Global status tracking
+_seeder_status = {
+    "enabled": False,
+    "last_run": None,
+    "tasks_created": 0,
+    "errors": 0,
+    "last_error": None,
+}
+
+
+def get_seeder_status() -> dict:
+    """Return seeder health status for /health endpoint."""
+    return _seeder_status.copy()
+
 
 # Agent personas (50 total)
 AGENT_PERSONAS = [
@@ -138,10 +154,20 @@ for category_templates in TASK_TEMPLATES.values():
     ALL_TEMPLATES.extend(category_templates)
 
 
+def check_migration_applied(db) -> bool:
+    """Check if migration 006 (seeded column) has been applied."""
+    try:
+        db.execute(text("SELECT seeded FROM agents LIMIT 1"))
+        return True
+    except OperationalError:
+        return False
+
+
 def ensure_seeded_agents(db) -> list[str]:
     """
     Ensure seeded agent pool exists. Creates on first run, loads on subsequent runs.
     Returns list of seeded agent IDs.
+    Uses deterministic IDs to prevent duplicates on crash/restart.
     """
     # Check if seeded agents already exist
     result = db.execute(text("SELECT id FROM agents WHERE seeded = true"))
@@ -151,12 +177,25 @@ def ensure_seeded_agents(db) -> list[str]:
         logger.debug(f"Loaded {len(existing_ids)} existing seeded agents")
         return existing_ids
     
-    # Create initial agent pool
+    # Create initial agent pool with deterministic IDs
     logger.info(f"Creating initial pool of {len(AGENT_PERSONAS)} seeded agents...")
     agent_ids = []
     
     for i, persona in enumerate(AGENT_PERSONAS):
-        agent_id = f"ag-seed{i:03d}{secrets.token_hex(4)}"
+        # Deterministic ID based on index (prevents duplicates)
+        agent_id = f"ag-seed{i:03d}{hashlib.sha256(persona['name'].encode()).hexdigest()[:8]}"
+        
+        # Check if already exists (idempotency)
+        existing = db.execute(
+            text("SELECT id FROM agents WHERE id = :id"),
+            {"id": agent_id}
+        ).first()
+        
+        if existing:
+            logger.debug(f"Agent {agent_id} already exists, skipping")
+            agent_ids.append(agent_id)
+            continue
+        
         api_key = f"pwk-seed{secrets.token_urlsafe(32)}"
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         key_fingerprint = api_key[:16]
@@ -182,7 +221,12 @@ def ensure_seeded_agents(db) -> list[str]:
 
 
 def create_seeded_task(db, agent_ids: list[str]) -> None:
-    """Create one seeded task with realistic workflow."""
+    """Create one seeded task with realistic workflow and proper error handling."""
+    # Safety check: need at least 2 agents (poster + worker)
+    if len(agent_ids) < 2:
+        logger.warning(f"Insufficient agents ({len(agent_ids)}), need at least 2")
+        return
+    
     template = random.choice(ALL_TEMPLATES)
     
     min_credits, max_credits = template["credits_range"]
@@ -193,165 +237,232 @@ def create_seeded_task(db, agent_ids: list[str]) -> None:
     # Determine task outcome (weighted toward completion)
     rand = random.random()
     
+    # All timestamps in the PAST (fix #1: future timestamps)
     now = datetime.utcnow()
+    created_at = now - timedelta(minutes=random.randint(10, 120))  # 10-120 min ago
     task_id = f"tk-seed{generate(size=12)}"
     
-    if rand < 0.75:  # 75% complete quickly
-        status = TaskStatus.approved
-        claimed_at = now + timedelta(minutes=random.randint(5, 60))
-        delivered_at = claimed_at + timedelta(minutes=random.randint(10, 120))
-        approved_at = delivered_at + timedelta(minutes=random.randint(1, 30))
-        expires_at = now + timedelta(hours=72)
-        worker_id = random.choice([aid for aid in agent_ids if aid != poster_id])
-        result = template["result"]
-        
-        # Credits
-        credits_charged = random.randint(int(max_credits_amount * 0.9), max_credits_amount)
-        platform_fee = int(credits_charged * 0.1)
-        worker_payout = credits_charged - platform_fee
-        
-        # Update agent balances
-        db.execute(
-            text("UPDATE agents SET credits = credits - :amount WHERE id = :id"),
-            {"amount": credits_charged, "id": poster_id}
-        )
-        db.execute(
-            text("UPDATE agents SET credits = credits + :amount, tasks_completed = tasks_completed + 1 WHERE id = :id"),
-            {"amount": worker_payout, "id": worker_id}
-        )
-        db.execute(
-            text("UPDATE agents SET tasks_posted = tasks_posted + 1 WHERE id = :id"),
-            {"id": poster_id}
-        )
-        
-        # Ledger entries
-        db.add(CreditLedger(
-            id=f"cl-seed{generate(size=12)}",
-            agent_id=poster_id,
-            amount=-credits_charged,
-            reason="task_payment",
-            task_id=task_id,
-            created_at=approved_at,
-        ))
-        db.add(CreditLedger(
-            id=f"cl-seed{generate(size=12)}",
-            agent_id=worker_id,
-            amount=worker_payout,
-            reason="task_completed",
-            task_id=task_id,
-            created_at=approved_at,
-        ))
-        
-        if settings.platform_agent_id:
+    try:
+        if rand < 0.75:  # 75% complete quickly
+            status = TaskStatus.approved
+            claimed_at = created_at + timedelta(minutes=random.randint(5, 60))
+            delivered_at = claimed_at + timedelta(minutes=random.randint(10, 120))
+            approved_at = delivered_at + timedelta(minutes=random.randint(1, 30))
+            expires_at = created_at + timedelta(hours=72)
+            
+            # Pick different agent as worker (fix #6: empty pool)
+            eligible_workers = [aid for aid in agent_ids if aid != poster_id]
+            if not eligible_workers:
+                logger.warning("No eligible workers, skipping task")
+                return
+            worker_id = random.choice(eligible_workers)
+            result = template["result"]
+            
+            # Credits
+            credits_charged = random.randint(int(max_credits_amount * 0.9), max_credits_amount)
+            platform_fee = int(credits_charged * 0.1)
+            worker_payout = credits_charged - platform_fee
+            
+            # Transaction safety (fix #2): all updates in one commit block
+            # Credit arithmetic with floor at 0 (fix #3)
+            db.execute(
+                text("""
+                    UPDATE agents 
+                    SET credits = CASE 
+                        WHEN credits >= :amount THEN credits - :amount 
+                        ELSE 0 
+                    END,
+                    tasks_posted = tasks_posted + 1
+                    WHERE id = :id
+                """),
+                {"amount": credits_charged, "id": poster_id}
+            )
+            
+            db.execute(
+                text("""
+                    UPDATE agents 
+                    SET credits = credits + :amount,
+                        tasks_completed = tasks_completed + 1
+                    WHERE id = :id
+                """),
+                {"amount": worker_payout, "id": worker_id}
+            )
+            
+            # Fix #7: Actually credit platform agent
+            if settings.platform_agent_id:
+                db.execute(
+                    text("UPDATE agents SET credits = credits + :amount WHERE id = :id"),
+                    {"amount": platform_fee, "id": settings.platform_agent_id}
+                )
+            
+            # Ledger entries
             db.add(CreditLedger(
                 id=f"cl-seed{generate(size=12)}",
-                agent_id=settings.platform_agent_id,
-                amount=platform_fee,
-                reason="platform_fee",
+                agent_id=poster_id,
+                amount=-credits_charged,
+                reason="task_payment",
                 task_id=task_id,
                 created_at=approved_at,
             ))
+            db.add(CreditLedger(
+                id=f"cl-seed{generate(size=12)}",
+                agent_id=worker_id,
+                amount=worker_payout,
+                reason="task_completed",
+                task_id=task_id,
+                created_at=approved_at,
+            ))
+            
+            if settings.platform_agent_id:
+                db.add(CreditLedger(
+                    id=f"cl-seed{generate(size=12)}",
+                    agent_id=settings.platform_agent_id,
+                    amount=platform_fee,
+                    reason="platform_fee",
+                    task_id=task_id,
+                    created_at=approved_at,
+                ))
+            
+            # Rating
+            rating_score = random.choice([3, 4, 4, 4, 5, 5])
+            db.add(Rating(
+                task_id=task_id,
+                rater_id=poster_id,
+                rated_id=worker_id,
+                score=rating_score,
+                created_at=approved_at + timedelta(minutes=random.randint(1, 15)),
+            ))
+            
+            # Fix #8: Batch reputation updates (done outside this function)
+            # We'll update reputation in bulk every hour instead of per-task
+            
+        elif rand < 0.90:  # 15% in progress
+            status = TaskStatus.claimed
+            claimed_at = created_at + timedelta(minutes=random.randint(5, 30))
+            delivered_at = None
+            approved_at = None
+            expires_at = created_at + timedelta(hours=72)
+            
+            eligible_workers = [aid for aid in agent_ids if aid != poster_id]
+            if not eligible_workers:
+                logger.warning("No eligible workers, skipping task")
+                return
+            worker_id = random.choice(eligible_workers)
+            result = None
+            credits_charged = None
+            
+            # Escrow with floor at 0
+            escrow_amount = random.randint(int(max_credits_amount * 0.9), max_credits_amount)
+            db.execute(
+                text("""
+                    UPDATE agents 
+                    SET credits = CASE 
+                        WHEN credits >= :amount THEN credits - :amount 
+                        ELSE 0 
+                    END,
+                    tasks_posted = tasks_posted + 1
+                    WHERE id = :id
+                """),
+                {"amount": escrow_amount, "id": poster_id}
+            )
+            
+            db.add(CreditLedger(
+                id=f"cl-seed{generate(size=12)}",
+                agent_id=poster_id,
+                amount=-escrow_amount,
+                reason="task_escrow",
+                task_id=task_id,
+                created_at=claimed_at,
+            ))
+            
+        else:  # 10% stay open
+            status = TaskStatus.posted
+            claimed_at = None
+            delivered_at = None
+            approved_at = None
+            expires_at = created_at + timedelta(hours=72)
+            worker_id = None
+            result = None
+            credits_charged = None
+            
+            db.execute(
+                text("UPDATE agents SET tasks_posted = tasks_posted + 1 WHERE id = :id"),
+                {"id": poster_id}
+            )
         
-        # Rating
-        rating_score = random.choice([3, 4, 4, 4, 5, 5])
-        db.add(Rating(
-            task_id=task_id,
-            rater_id=poster_id,
-            rated_id=worker_id,
-            score=rating_score,
-            created_at=approved_at + timedelta(minutes=random.randint(1, 15)),
-        ))
+        # Optional context
+        context = None
+        if random.random() < 0.3:
+            context = f"Additional context: This is for our {random.choice(['production', 'staging', 'development'])} environment."
         
-        # Update worker reputation
-        db.execute(
-            text("""
-                UPDATE agents 
-                SET reputation = (
-                    SELECT AVG(score) 
-                    FROM ratings 
-                    WHERE rated_id = :worker_id
-                )
-                WHERE id = :worker_id
-            """),
-            {"worker_id": worker_id}
+        tags_json = json.dumps(template["tags"])
+        
+        task = Task(
+            id=task_id,
+            poster_id=poster_id,
+            worker_id=worker_id,
+            need=template["need"],
+            context=context,
+            max_credits=max_credits_amount,
+            credits_charged=credits_charged,
+            status=status,
+            tags=tags_json,
+            created_at=created_at,
+            claimed_at=claimed_at,
+            delivered_at=delivered_at,
+            expires_at=expires_at,
+            result=result,
+            seeded=True,
         )
+        db.add(task)
+        db.commit()  # Commit successful task
         
-    elif rand < 0.90:  # 15% in progress
-        status = TaskStatus.claimed
-        claimed_at = now + timedelta(minutes=random.randint(5, 30))
-        delivered_at = None
-        approved_at = None
-        expires_at = now + timedelta(hours=72)
-        worker_id = random.choice([aid for aid in agent_ids if aid != poster_id])
-        result = None
-        credits_charged = None
-        
-        # Escrow
-        escrow_amount = random.randint(int(max_credits_amount * 0.9), max_credits_amount)
-        db.execute(
-            text("UPDATE agents SET credits = credits - :amount WHERE id = :id"),
-            {"amount": escrow_amount, "id": poster_id}
-        )
-        db.execute(
-            text("UPDATE agents SET tasks_posted = tasks_posted + 1 WHERE id = :id"),
-            {"id": poster_id}
-        )
-        
-        db.add(CreditLedger(
-            id=f"cl-seed{generate(size=12)}",
-            agent_id=poster_id,
-            amount=-escrow_amount,
-            reason="task_escrow",
-            task_id=task_id,
-            created_at=claimed_at,
-        ))
-        
-    else:  # 10% stay open
-        status = TaskStatus.posted
-        claimed_at = None
-        delivered_at = None
-        approved_at = None
-        expires_at = now + timedelta(hours=72)
-        worker_id = None
-        result = None
-        credits_charged = None
-        
-        db.execute(
-            text("UPDATE agents SET tasks_posted = tasks_posted + 1 WHERE id = :id"),
-            {"id": poster_id}
-        )
-    
-    # Optional context
-    context = None
-    if random.random() < 0.3:
-        context = f"Additional context: This is for our {random.choice(['production', 'staging', 'development'])} environment."
-    
-    tags_json = json.dumps(template["tags"])
-    
-    task = Task(
-        id=task_id,
-        poster_id=poster_id,
-        worker_id=worker_id,
-        need=template["need"],
-        context=context,
-        max_credits=max_credits_amount,
-        credits_charged=credits_charged,
-        status=status,
-        tags=tags_json,
-        created_at=now,
-        claimed_at=claimed_at,
-        delivered_at=delivered_at,
-        expires_at=expires_at,
-        result=result,
-        seeded=True,
-    )
-    db.add(task)
-    db.commit()
+    except Exception as e:
+        # Fix #5: Error handling in task creation
+        logger.error(f"Failed to create seeded task: {e}", exc_info=True)
+        db.rollback()
+        raise  # Re-raise so caller can track errors
+
+
+def update_seeded_reputations(db) -> None:
+    """Batch update reputation for all seeded agents (fix #8: efficiency)."""
+    try:
+        db.execute(text("""
+            UPDATE agents
+            SET reputation = (
+                SELECT COALESCE(AVG(score), 0)
+                FROM ratings
+                WHERE rated_id = agents.id
+            )
+            WHERE seeded = true
+        """))
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to update seeded reputations: {e}", exc_info=True)
+        db.rollback()
 
 
 async def drip_seeder_loop():
     """Background task that drips seeded tasks into the marketplace."""
+    global _seeder_status
+    
+    logger.info("🦞 Marketplace seeder starting...")
+    
+    # Fix #9: Check migration applied
+    db = SessionLocal()
+    try:
+        if not check_migration_applied(db):
+            logger.error("Migration 006 (seeded column) not applied, seeder disabled")
+            _seeder_status["enabled"] = False
+            _seeder_status["last_error"] = "Migration 006 not applied"
+            return
+    finally:
+        db.close()
+    
     logger.info("🦞 Marketplace seeder started (drip mode)")
+    _seeder_status["enabled"] = True
+    
+    reputation_update_counter = 0
     
     while True:
         try:
@@ -362,7 +473,7 @@ async def drip_seeder_loop():
             
             db = SessionLocal()
             try:
-                # Ensure agent pool exists
+                # Ensure agent pool exists (fix #11: idempotency)
                 agent_ids = ensure_seeded_agents(db)
                 
                 # Calculate tasks to create based on time of day
@@ -380,15 +491,36 @@ async def drip_seeder_loop():
                 
                 if num_tasks > 0:
                     logger.info(f"Creating {num_tasks} seeded tasks (hour={hour}, rate={lambda_rate}/h)")
+                    
+                    created = 0
                     for _ in range(num_tasks):
-                        create_seeded_task(db, agent_ids)
-                    logger.debug(f"✓ Created {num_tasks} tasks")
+                        try:
+                            create_seeded_task(db, agent_ids)
+                            created += 1
+                            _seeder_status["tasks_created"] += 1
+                        except Exception as e:
+                            _seeder_status["errors"] += 1
+                            _seeder_status["last_error"] = str(e)
+                            # Continue with next task
+                    
+                    logger.debug(f"✓ Created {created}/{num_tasks} tasks")
+                
+                # Update reputations hourly (fix #8: batch instead of per-task)
+                reputation_update_counter += 1
+                if reputation_update_counter >= 6:  # Every 60 minutes (6 × 10min)
+                    update_seeded_reputations(db)
+                    reputation_update_counter = 0
+                
+                _seeder_status["last_run"] = datetime.utcnow().isoformat()
                 
             finally:
                 db.close()
             
         except Exception as e:
-            logger.error(f"Seeder error: {e}", exc_info=True)
+            # Fix #10: Track errors in status
+            logger.error(f"Seeder loop error: {e}", exc_info=True)
+            _seeder_status["errors"] += 1
+            _seeder_status["last_error"] = str(e)
         
         # Run every 10 minutes
         await asyncio.sleep(600)
