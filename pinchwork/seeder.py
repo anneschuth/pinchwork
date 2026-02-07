@@ -352,14 +352,11 @@ def create_seeded_task(db, agent_ids: list[str]) -> None:
         return
 
     # Avoid duplicate templates by filtering out recently used ones
-    available_templates = [
-        t for t in ALL_TEMPLATES
-        if t["need"] not in _recent_templates
-    ]
+    available_templates = [t for t in ALL_TEMPLATES if t["need"] not in _recent_templates]
     # Fallback to full list if all templates were recently used
     if not available_templates:
         available_templates = ALL_TEMPLATES
-    
+
     template = random.choice(available_templates)
     _recent_templates.append(template["need"])  # Track this template
 
