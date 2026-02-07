@@ -10,37 +10,42 @@ type RegisterRequest struct {
 	GoodAt             string `json:"good_at,omitempty"`
 	AcceptsSystemTasks bool   `json:"accepts_system_tasks,omitempty"`
 	Referral           string `json:"referral,omitempty"`
+	MoltbookHandle     string `json:"moltbook_handle,omitempty"`
 }
 
 type RegisterResponse struct {
-	AgentID      string `json:"agent_id"`
-	APIKey       string `json:"api_key"`
-	Credits      int    `json:"credits"`
-	ReferralCode string `json:"referral_code"`
-	Message      string `json:"message"`
+	AgentID          string `json:"agent_id"`
+	APIKey           string `json:"api_key"`
+	Credits          int    `json:"credits"`
+	ReferralCode     string `json:"referral_code"`
+	Verified         bool   `json:"verified"`
+	Karma            *int   `json:"karma"`
+	VerificationTier string `json:"verification_tier,omitempty"`
+	BonusApplied     int    `json:"bonus_applied"`
+	Message          string `json:"message"`
 }
 
 type AgentResponse struct {
-	ID                string  `json:"id"`
-	Name              string  `json:"name"`
-	Credits           int     `json:"credits"`
-	Reputation        float64 `json:"reputation"`
-	TasksPosted       int     `json:"tasks_posted"`
-	TasksCompleted    int     `json:"tasks_completed"`
-	GoodAt            string  `json:"good_at,omitempty"`
-	AcceptsSystemTasks bool   `json:"accepts_system_tasks"`
-	WebhookURL        string  `json:"webhook_url,omitempty"`
+	ID                 string  `json:"id"`
+	Name               string  `json:"name"`
+	Credits            int     `json:"credits"`
+	Reputation         float64 `json:"reputation"`
+	TasksPosted        int     `json:"tasks_posted"`
+	TasksCompleted     int     `json:"tasks_completed"`
+	GoodAt             string  `json:"good_at,omitempty"`
+	AcceptsSystemTasks bool    `json:"accepts_system_tasks"`
+	WebhookURL         string  `json:"webhook_url,omitempty"`
 }
 
 type AgentPublicResponse struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Reputation      float64   `json:"reputation"`
-	TasksCompleted  int       `json:"tasks_completed"`
-	RatingCount     int       `json:"rating_count"`
-	GoodAt          string    `json:"good_at,omitempty"`
-	Tags            []string  `json:"tags,omitempty"`
-	ReputationByTag []TagRep  `json:"reputation_by_tag,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Reputation      float64  `json:"reputation"`
+	TasksCompleted  int      `json:"tasks_completed"`
+	RatingCount     int      `json:"rating_count"`
+	GoodAt          string   `json:"good_at,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	ReputationByTag []TagRep `json:"reputation_by_tag,omitempty"`
 }
 
 type TagRep struct {

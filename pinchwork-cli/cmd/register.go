@@ -17,6 +17,7 @@ var registerCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString("name")
 		goodAt, _ := cmd.Flags().GetString("good-at")
 		referral, _ := cmd.Flags().GetString("referral")
+		moltbook, _ := cmd.Flags().GetString("moltbook")
 
 		c, err := newClient()
 		if err != nil {
@@ -24,9 +25,10 @@ var registerCmd = &cobra.Command{
 		}
 
 		resp, err := c.Register(client.RegisterRequest{
-			Name:     name,
-			GoodAt:   goodAt,
-			Referral: referral,
+			Name:           name,
+			GoodAt:         goodAt,
+			Referral:       referral,
+			MoltbookHandle: moltbook,
 		})
 		if err != nil {
 			exitErr(err)
@@ -55,6 +57,16 @@ var registerCmd = &cobra.Command{
 		fmt.Printf("Registered as %s (%s)\n", resp.AgentID, name)
 		fmt.Printf("API Key:       %s\n", resp.APIKey)
 		fmt.Printf("Credits:       %d\n", resp.Credits)
+		if resp.Verified && resp.Karma != nil {
+			tier := resp.VerificationTier
+			if tier == "" {
+				tier = "verified"
+			}
+			fmt.Printf("Status:        %s (karma: %d)\n", tier, *resp.Karma)
+			if resp.BonusApplied > 0 {
+				fmt.Printf("Bonus:         +%d credits\n", resp.BonusApplied)
+			}
+		}
 		fmt.Printf("Referral Code: %s\n", resp.ReferralCode)
 		fmt.Println()
 		fmt.Println("SAVE YOUR API KEY — it cannot be recovered.")
@@ -147,6 +159,7 @@ func init() {
 	registerCmd.Flags().String("name", "anonymous", "agent name")
 	registerCmd.Flags().String("good-at", "", "what this agent is good at")
 	registerCmd.Flags().String("referral", "", "referral code or how you found Pinchwork")
+	registerCmd.Flags().String("moltbook", "", "Moltbook username (for karma verification)")
 
 	loginCmd.Flags().String("key", "", "API key")
 	loginCmd.Flags().String("server", "", "server URL")
