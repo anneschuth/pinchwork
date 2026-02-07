@@ -341,7 +341,11 @@ async def admin_overview(
     <div class="stat-card">
       <div class="label">Status</div>
       <div style="font-size:11pt;margin-top:4px">
-        {"<span class='badge badge-success'>Enabled</span>" if seeder_status["enabled"] and settings.seed_marketplace_drip else "<span class='badge badge-muted'>Disabled</span>"}
+        {
+            "<span class='badge badge-success'>Enabled</span>" 
+            if seeder_status["enabled"] and settings.seed_marketplace_drip 
+            else "<span class='badge badge-muted'>Disabled</span>"
+        }
       </div>
     </div>
     <div class="stat-card">
@@ -1554,7 +1558,11 @@ async def admin_seeder(
     # Fix #4: Migration warning
     migration_warning = ""
     if not migration_applied:
-        migration_warning = '<div class="alert alert-error">⚠️ Migration 006 not applied. Seeder disabled.</div>'
+        migration_warning = (
+            '<div class="alert alert-error">'
+            "⚠️ Migration 006 not applied. Seeder disabled."
+            "</div>"
+        )
     
     csrf = csrf_token()
     
@@ -1602,7 +1610,8 @@ async def admin_seeder(
         <td><strong>Drip Feed</strong></td>
         <td>
           <label>
-            <input type="checkbox" name="enabled" {"checked" if settings.seed_marketplace_drip else ""}>
+            <input type="checkbox" name="enabled" 
+                   {"checked" if settings.seed_marketplace_drip else ""}>
             Enable automatic seeding
           </label>
         </td>
@@ -1610,22 +1619,28 @@ async def admin_seeder(
       <tr>
         <td><strong>Business Hours Rate</strong></td>
         <td>
-          <input type="number" name="rate_business" value="{html.escape(str(settings.seed_drip_rate_business))}" 
-                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (9-18 UTC)
+          <input type="number" name="rate_business" 
+                 value="{html.escape(str(settings.seed_drip_rate_business))}" 
+                 min="0" max="100" step="0.5" style="width:80px"> 
+          tasks/hour (9-18 UTC)
         </td>
       </tr>
       <tr>
         <td><strong>Evening Rate</strong></td>
         <td>
-          <input type="number" name="rate_evening" value="{html.escape(str(settings.seed_drip_rate_evening))}" 
-                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (18-23 UTC)
+          <input type="number" name="rate_evening" 
+                 value="{html.escape(str(settings.seed_drip_rate_evening))}" 
+                 min="0" max="100" step="0.5" style="width:80px"> 
+          tasks/hour (18-23 UTC)
         </td>
       </tr>
       <tr>
         <td><strong>Night Rate</strong></td>
         <td>
-          <input type="number" name="rate_night" value="{html.escape(str(settings.seed_drip_rate_night))}" 
-                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (23-9 UTC)
+          <input type="number" name="rate_night" 
+                 value="{html.escape(str(settings.seed_drip_rate_night))}" 
+                 min="0" max="100" step="0.5" style="width:80px"> 
+          tasks/hour (23-9 UTC)
         </td>
       </tr>
     </table>
@@ -1686,7 +1701,7 @@ async def admin_seeder(
 <div class="section">
   <h3>How It Works</h3>
   <ul style="line-height:1.8;margin-left:20px">
-    <li><strong>Drip feed:</strong> Creates 0-3 tasks every 10 minutes using Poisson distribution</li>
+    <li><strong>Drip feed:</strong> Creates 0-3 tasks every 10 min (Poisson)</li>
     <li><strong>Agent pool:</strong> 50 seeded agents created on first run, reused on restarts</li>
     <li><strong>Task lifecycle:</strong> 75% complete, 15% in-progress, 10% open</li>
     <li><strong>Timestamps:</strong> All in past (10-120 min ago), sequential</li>
@@ -1721,11 +1736,17 @@ async def admin_seeder_config(
         rate_night = float(form.get("rate_night", 0.5))
         
         if not (0 <= rate_business <= 100):
-            return RedirectResponse("/admin/seeder?error=Business+rate+must+be+0-100", status_code=303)
+            return RedirectResponse(
+                "/admin/seeder?error=Business+rate+must+be+0-100", status_code=303
+            )
         if not (0 <= rate_evening <= 100):
-            return RedirectResponse("/admin/seeder?error=Evening+rate+must+be+0-100", status_code=303)
+            return RedirectResponse(
+                "/admin/seeder?error=Evening+rate+must+be+0-100", status_code=303
+            )
         if not (0 <= rate_night <= 100):
-            return RedirectResponse("/admin/seeder?error=Night+rate+must+be+0-100", status_code=303)
+            return RedirectResponse(
+                "/admin/seeder?error=Night+rate+must+be+0-100", status_code=303
+            )
         
         settings.seed_drip_rate_business = rate_business
         settings.seed_drip_rate_evening = rate_evening
@@ -1757,9 +1778,14 @@ async def admin_seeder_clean(
         return RedirectResponse("/admin/seeder?error=Migration+006+not+applied", status_code=303)
     
     # Fix #11: Early return if no seeded data
-    count = (await session.execute(text("SELECT COUNT(*) FROM agents WHERE seeded = true"))).scalar() or 0
+    count_result = await session.execute(
+        text("SELECT COUNT(*) FROM agents WHERE seeded = true")
+    )
+    count = count_result.scalar() or 0
     if count == 0:
-        return RedirectResponse("/admin/seeder?success=No+seeded+data+to+clean", status_code=303)
+        return RedirectResponse(
+            "/admin/seeder?success=No+seeded+data+to+clean", status_code=303
+        )
     
     # Fix #3: Transaction safety with rollback
     try:
@@ -1768,10 +1794,16 @@ async def admin_seeder_clean(
             text("DELETE FROM ratings WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)")
         )
         result_ledger_tasks = await session.execute(
-            text("DELETE FROM credit_ledger WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)")
+            text(
+                "DELETE FROM credit_ledger WHERE task_id IN "
+                "(SELECT id FROM tasks WHERE seeded = true)"
+            )
         )
         result_ledger_agents = await session.execute(
-            text("DELETE FROM credit_ledger WHERE agent_id IN (SELECT id FROM agents WHERE seeded = true)")
+            text(
+                "DELETE FROM credit_ledger WHERE agent_id IN "
+                "(SELECT id FROM agents WHERE seeded = true)"
+            )
         )
         result_tasks = await session.execute(text("DELETE FROM tasks WHERE seeded = true"))
         result_agents = await session.execute(text("DELETE FROM agents WHERE seeded = true"))
