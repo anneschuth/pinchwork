@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     task_preview_length: int = 80
     webhook_timeout_seconds: int = 10
     webhook_max_retries: int = 3
+    seed_marketplace_drip: bool = False
+    seed_drip_rate_business: float = 8.0
+    seed_drip_rate_evening: float = 3.0
+    seed_drip_rate_night: float = 0.5
 
     model_config = {"env_prefix": "PINCHWORK_"}
 

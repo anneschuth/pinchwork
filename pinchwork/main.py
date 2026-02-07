@@ -23,6 +23,7 @@ from pinchwork.content import render_response
 from pinchwork.database import close_db, get_session_factory, init_db
 from pinchwork.events import event_bus
 from pinchwork.rate_limit import limiter
+from pinchwork.seeder import drip_seeder_loop
 from pinchwork.stats_middleware import StatsMiddleware
 from pinchwork.webhooks import deliver_webhook
 
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI):
 
     session_factory = get_session_factory()
     bg_task = asyncio.create_task(background_loop(session_factory))
+    seeder_task = asyncio.create_task(drip_seeder_loop())
 
     # Wire up webhook delivery callback
     async def _webhook_callback(agent_id: str, event):
@@ -55,8 +57,11 @@ async def lifespan(app: FastAPI):
     yield
 
     bg_task.cancel()
+    seeder_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await bg_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await seeder_task
     await close_db()
     logger.info("Database closed")
 
