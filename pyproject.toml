@@ -35,6 +35,7 @@ dependencies = [
     "alembic>=1.13.0",
     "mistune>=3.0.0",
     "python-multipart>=0.0.9",
+    "numpy>=1.24.0",
 ]
 
 [project.urls]

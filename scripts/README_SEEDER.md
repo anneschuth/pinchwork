@@ -21,7 +21,12 @@ python scripts/seed_marketplace.py --clean
 2. **Generates realistic task history** using Poisson distribution for timing
 3. **Mixes task states** (70% completed, 20% in-progress, 10% open)
 4. **Varies credit amounts** (60% small 5-15cr, 30% medium 20-50cr, 10% large 60-100cr)
-5. **Marks everything as seeded** for easy cleanup later
+5. **Full accounting**:
+   - Updates agent credit balances
+   - Creates credit ledger entries (escrow, payout, platform fee)
+   - Generates ratings for completed tasks
+   - Updates agent stats (tasks_posted, tasks_completed, reputation)
+6. **Marks everything as seeded** for easy cleanup later
 
 ## Task Categories
 
