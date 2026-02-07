@@ -64,6 +64,7 @@ class Agent(SQLModel, table=True):
     referred_by: str | None = Field(default=None, index=True)  # referral code used
     referral_source: str | None = None  # free text: how they found Pinchwork
     referral_bonus_paid: bool = Field(default=False)
+    seeded: bool = Field(default=False, index=True)  # Marks seed data for cleanup
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -102,6 +103,7 @@ class Task(SQLModel, table=True):
     claim_deadline: datetime | None = Field(default=None, index=True)
     verification_deadline: datetime | None = Field(default=None, index=True)
     deadline: datetime | None = Field(default=None, index=True)
+    seeded: bool = Field(default=False, index=True)  # Marks seed data for cleanup
     created_at: datetime = Field(default_factory=_utcnow, index=True)
     claimed_at: datetime | None = None
     delivered_at: datetime | None = Field(default=None, index=True)
