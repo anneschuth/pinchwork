@@ -14,7 +14,12 @@ from pinchwork.auth import hash_key, key_fingerprint
 from pinchwork.config import settings
 from pinchwork.db_models import Agent, Rating, Task, TaskStatus
 from pinchwork.ids import agent_id, api_key, referral_code
-from pinchwork.karma import fetch_moltbook_karma, get_bonus_credits, get_verification_tier
+from pinchwork.karma import (
+    fetch_moltbook_karma,
+    get_bonus_credits,
+    get_verification_tier,
+    validate_moltbook_handle,
+)
 from pinchwork.services.credits import record_credit
 
 logger = logging.getLogger("pinchwork.agents")
@@ -56,20 +61,48 @@ async def register(
     karma_verified_at: datetime | None = None
 
     if moltbook_handle:
-        # Strip @ if present
-        moltbook_handle = moltbook_handle.lstrip("@")
+        try:
+            # Validate and normalize handle
+            moltbook_handle = validate_moltbook_handle(moltbook_handle)
 
-        # Fetch karma from Moltbook
-        karma = await fetch_moltbook_karma(moltbook_handle, api_key=settings.moltbook_api_key)
-
-        if karma is not None and karma >= 100:
-            verified = True
-            bonus_credits = get_bonus_credits(karma)
-            karma_verified_at = datetime.now(UTC)
-            logger.info(
-                f"Agent {name} verified with {karma} karma "
-                f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
+            # Check if handle is already claimed by another agent
+            existing = await session.execute(
+                select(Agent).where(Agent.moltbook_handle == moltbook_handle)
             )
+            if existing.scalar_one_or_none():
+                logger.warning(
+                    f"Moltbook handle @{moltbook_handle} already claimed by another agent"
+                )
+                raise ValueError(
+                    f"Moltbook handle @{moltbook_handle} is already registered. "
+                    "Each Moltbook account can only be linked to one Pinchwork agent."
+                )
+
+            # Fetch karma from Moltbook
+            karma = await fetch_moltbook_karma(
+                moltbook_handle, api_key=settings.moltbook_api_key
+            )
+
+            if karma is not None and karma >= 100:
+                verified = True
+                bonus_credits = get_bonus_credits(karma)
+                karma_verified_at = datetime.now(UTC)
+                logger.info(
+                    f"Agent {name} verified with {karma} karma "
+                    f"(tier: {get_verification_tier(karma)}, bonus: +{bonus_credits} credits)"
+                )
+            elif karma is not None:
+                logger.info(
+                    f"Agent {name} has {karma} karma (below verification threshold)"
+                )
+            else:
+                logger.warning(
+                    f"Could not fetch karma for @{moltbook_handle} (API unavailable or user not found)"
+                )
+
+        except ValueError as e:
+            # Re-raise validation errors
+            raise e
 
     total_credits = settings.initial_credits + bonus_credits
 

@@ -2,7 +2,12 @@
 
 import pytest
 
-from pinchwork.karma import get_bonus_credits, get_tier_badge, get_verification_tier
+from pinchwork.karma import (
+    get_bonus_credits,
+    get_tier_badge,
+    get_verification_tier,
+    validate_moltbook_handle,
+)
 
 
 def test_verification_tiers():
@@ -37,3 +42,40 @@ def test_tier_badges():
     assert get_tier_badge(True, 100) == "✓ Verified"
     assert get_tier_badge(True, 500) == "✨ PREMIUM"
     assert get_tier_badge(True, 1000) == "⭐ ELITE"
+
+
+def test_validate_handle_valid():
+    """Test validation of valid handles."""
+    assert validate_moltbook_handle("pinch") == "pinch"
+    assert validate_moltbook_handle("@pinch") == "pinch"
+    assert validate_moltbook_handle("  @pinch  ") == "pinch"
+    assert validate_moltbook_handle("test_user") == "test_user"
+    assert validate_moltbook_handle("user-123") == "user-123"
+    assert validate_moltbook_handle("Agent_99") == "Agent_99"
+
+
+def test_validate_handle_invalid():
+    """Test validation rejects invalid handles."""
+    # Empty
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_moltbook_handle("")
+    
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_moltbook_handle("@")
+    
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_moltbook_handle("   ")
+    
+    # Invalid characters
+    with pytest.raises(ValueError, match="can only contain"):
+        validate_moltbook_handle("user@example.com")
+    
+    with pytest.raises(ValueError, match="can only contain"):
+        validate_moltbook_handle("user name")
+    
+    with pytest.raises(ValueError, match="can only contain"):
+        validate_moltbook_handle("user!123")
+    
+    # Too long
+    with pytest.raises(ValueError, match="too long"):
+        validate_moltbook_handle("a" * 51)

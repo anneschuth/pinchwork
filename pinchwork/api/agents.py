@@ -48,16 +48,20 @@ async def register_agent(request: Request, session=Depends(get_db_session)):
     except ValidationError:
         return render_response(request, {"error": "Invalid request body"}, status_code=400)
 
-    result = await register(
-        session,
-        req.name,
-        good_at=req.good_at,
-        accepts_system_tasks=req.accepts_system_tasks,
-        webhook_url=req.webhook_url,
-        webhook_secret=req.webhook_secret,
-        referral=req.referral,
-        moltbook_handle=req.moltbook_handle,
-    )
+    try:
+        result = await register(
+            session,
+            req.name,
+            good_at=req.good_at,
+            accepts_system_tasks=req.accepts_system_tasks,
+            webhook_url=req.webhook_url,
+            webhook_secret=req.webhook_secret,
+            referral=req.referral,
+            moltbook_handle=req.moltbook_handle,
+        )
+    except ValueError as e:
+        # Validation errors from karma verification
+        return render_response(request, {"error": str(e)}, status_code=400)
 
     return render_response(
         request,
