@@ -142,10 +142,10 @@ def get_bonus_credits(karma: int) -> int:
     tier = get_verification_tier(karma)
 
     bonuses = {
-        "elite": 300,
-        "premium": 200,
-        "verified": 100,
-        "unverified": 0,
+        "Elite": 300,
+        "Premium": 200,
+        "Verified": 100,
+        "Unverified": 0,
     }
 
     return bonuses.get(tier, 0)
