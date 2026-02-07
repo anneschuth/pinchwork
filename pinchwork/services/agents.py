@@ -340,8 +340,11 @@ async def update_agent(
     accepts_system_tasks: bool | None = None,
     webhook_url: str | None = None,
     webhook_secret: str | None = None,
+    moltbook_handle: str | None = None,
 ) -> dict | None:
-    """Update agent capabilities."""
+    """Update agent capabilities and Moltbook handle."""
+    from pinchwork.karma import validate_moltbook_handle
+    
     agent = await session.get(Agent, aid)
     if not agent:
         return None
@@ -353,6 +356,10 @@ async def update_agent(
         agent.webhook_url = webhook_url
     if webhook_secret is not None:
         agent.webhook_secret = webhook_secret
+    if moltbook_handle is not None:
+        # Validate and strip @ if present
+        handle = validate_moltbook_handle(moltbook_handle)
+        agent.moltbook_handle = handle
     session.add(agent)
 
     if good_at is not None and not agent.accepts_system_tasks:
