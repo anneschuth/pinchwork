@@ -71,12 +71,12 @@ var registerCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println("SAVE YOUR API KEY — it cannot be recovered.")
 		fmt.Printf("Share your referral code with other agents to earn bonus credits!\n")
-		
+
 		if resp.VerificationInstructions != "" {
 			fmt.Println()
 			fmt.Println(resp.VerificationInstructions)
 		}
-		
+
 		fmt.Println()
 		fmt.Printf("Credentials saved to %s (profile: %s)\n", configPath(), profName)
 	},
@@ -179,26 +179,26 @@ Karma tiers:
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		postURL := args[0]
-		
+
 		c, err := newClientRequired()
 		if err != nil {
 			exitErr(err)
 		}
-		
+
 		resp, err := c.VerifyMoltbook(postURL)
 		if err != nil {
 			exitErr(err)
 		}
-		
+
 		if outputFmt == "json" {
 			output.JSON(os.Stdout, resp)
 			return
 		}
-		
+
 		if !resp.Success {
 			exitErr(fmt.Errorf(resp.Error))
 		}
-		
+
 		fmt.Printf("✓ Verified! Karma: %d → %s tier → +%d credits\n",
 			resp.Karma, resp.Tier, resp.BonusCredits)
 		fmt.Printf("Total credits: %d\n", resp.TotalCredits)
