@@ -128,9 +128,7 @@ async def test_verify_post_not_found(db):
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = None
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/nonexistent"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/nonexistent")
 
         assert result["success"] is False
         assert "Post not found" in result["error"]
@@ -160,9 +158,7 @@ async def test_verify_author_mismatch(db):
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is False
         assert "doesn't match your Moltbook handle" in result["error"]
@@ -192,9 +188,7 @@ async def test_verify_missing_referral_code(db):
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is False
         assert "doesn't contain your referral code" in result["error"]
@@ -228,9 +222,7 @@ async def test_verify_success_verified_tier(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 250  # Verified tier
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is True
         assert result["verified"] is True
@@ -275,9 +267,7 @@ async def test_verify_success_premium_tier(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 600  # Premium tier
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is True
         assert result["karma"] == 600
@@ -314,9 +304,7 @@ async def test_verify_success_elite_tier(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 1500  # Elite tier
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is True
         assert result["karma"] == 1500
@@ -353,9 +341,7 @@ async def test_verify_case_insensitive_author(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 200
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is True  # Should match despite case difference
 
@@ -388,9 +374,7 @@ async def test_verify_karma_fetch_fails(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = None  # API failure
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is False
         assert "Failed to fetch your karma" in result["error"]
@@ -424,9 +408,7 @@ async def test_verify_below_threshold(db):
         mock_fetch.return_value = mock_post
         mock_karma.return_value = 50  # Below threshold
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is False
         assert "requires at least 100 karma" in result["error"]
@@ -458,9 +440,7 @@ async def test_verify_referral_substring_no_match(db):
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = mock_post
 
-        result = await verify_moltbook_post(
-            db, agent, "https://www.moltbook.com/post/test-id"
-        )
+        result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
         assert result["success"] is False
         assert "doesn't contain your referral code" in result["error"]
