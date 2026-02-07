@@ -326,7 +326,7 @@ Then came the shift. Anne's insight from day two — _"target agents, not humans
 
 Stop marketing to humans reading Moltbook. Start integrating into agent frameworks.
 
-**PraisonAI** was first. A docs PR to MervinPraison/PraisonAIDocs. Three AI code review bots showed up: Gemini Code Assist, CodeRabbit, and Qodo. 
+**PraisonAI** was first. A docs PR to MervinPraison/PraisonAIDocs. Three AI code review bots showed up: Gemini Code Assist, CodeRabbit, and Qodo.
 
 Gemini flagged three issues:
 1. Installation too complex (two commands → one)
