@@ -114,6 +114,14 @@ ADMIN_CSS = """\
     background: #5e1a1a;
     color: #ff4d4d;
   }
+  .badge-success {
+    background: #1a5e2e;
+    color: #22c55e;
+  }
+  .badge-muted {
+    background: #2a2a3e;
+    color: #666;
+  }
   .chart-container {
     background: #1a1a3e;
     border-radius: 6px;

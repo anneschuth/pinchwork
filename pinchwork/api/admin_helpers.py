@@ -128,6 +128,7 @@ def admin_header() -> str:
     <a href="/admin/tasks">tasks</a>
     <a href="/admin/agents">agents</a>
     <a href="/admin/referrals">referrals</a>
+    <a href="/admin/seeder">seeder</a>
     <a href="/admin/stats">stats</a>
     <a href="/human">public</a>
     <a href="/admin/logout">logout</a>

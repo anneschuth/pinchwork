@@ -33,6 +33,7 @@ from pinchwork.db_models import (
     TaskQuestion,
 )
 from pinchwork.rate_limit import limiter
+from pinchwork.seeder import get_seeder_status
 
 from .admin_helpers import (
     COOKIE_NAME,
@@ -237,6 +238,15 @@ async def admin_overview(
     ).all()
     completions_per_hour = [(h.split(" ")[1] + "h", c) for h, c in completions_per_hour_raw]
 
+    # Seeder status
+    seeder_status = get_seeder_status()
+    seeded_agents_count = (
+        await session.execute(text("SELECT COUNT(*) FROM agents WHERE seeded = true"))
+    ).scalar() or 0
+    seeded_tasks_count = (
+        await session.execute(text("SELECT COUNT(*) FROM tasks WHERE seeded = true"))
+    ).scalar() or 0
+
     # Recent tasks (last 10)
     recent_result = await session.execute(
         select(Task).order_by(col(Task.created_at).desc()).limit(10)
@@ -303,6 +313,42 @@ async def admin_overview(
     <div class="stat-card">
       <div class="number">{referred_count}</div>
       <div class="label">Referred</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🦞 Marketplace Seeder 
+    <a href="/admin/seeder" style="font-size:10pt;margin-left:10px">→ Manage</a>
+  </h2>
+  <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+    <div class="stat-card">
+      <div class="label">Status</div>
+      <div style="font-size:11pt;margin-top:4px">
+        {"<span class='badge badge-success'>Enabled</span>" if seeder_status["enabled"] and settings.seed_marketplace_drip else "<span class='badge badge-muted'>Disabled</span>"}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{seeder_status["tasks_created"]:,}</div>
+      <div class="label">Tasks Created</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{seeded_agents_count}</div>
+      <div class="label">Seeded Agents</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{seeded_tasks_count:,}</div>
+      <div class="label">Seeded Tasks</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{seeder_status["errors"]}</div>
+      <div class="label">Errors</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Last Run</div>
+      <div style="font-size:10pt;margin-top:4px;color:#666">
+        {relative_time(datetime.fromisoformat(seeder_status["last_run"])) if seeder_status["last_run"] else "Never"}
+      </div>
     </div>
   </div>
 </div>
@@ -1384,3 +1430,271 @@ async def admin_stats(
 </div>"""
 
     return HTMLResponse(admin_page("Route Stats", body))
+
+
+# ---------------------------------------------------------------------------
+# Seeder Control
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/seeder", include_in_schema=False, response_class=HTMLResponse)
+async def admin_seeder(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    _=AdminAuth,
+):
+    """Seeder control dashboard: status, stats, configuration, cleanup."""
+    status = get_seeder_status()
+    
+    # Get seeded vs real counts
+    seeded_agents = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM agents WHERE seeded = true")
+        )
+    ).scalar() or 0
+    
+    real_agents = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM agents WHERE seeded = false")
+        )
+    ).scalar() or 0
+    
+    seeded_tasks = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM tasks WHERE seeded = true")
+        )
+    ).scalar() or 0
+    
+    real_tasks = (
+        await session.execute(
+            text("SELECT COUNT(*) FROM tasks WHERE seeded = false")
+        )
+    ).scalar() or 0
+    
+    seeded_ledger = (
+        await session.execute(
+            text("""
+                SELECT COUNT(*) FROM credit_ledger 
+                WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)
+            """)
+        )
+    ).scalar() or 0
+    
+    seeded_ratings = (
+        await session.execute(
+            text("""
+                SELECT COUNT(*) FROM ratings 
+                WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)
+            """)
+        )
+    ).scalar() or 0
+    
+    # Status indicators
+    enabled_badge = (
+        '<span class="badge badge-success">Enabled</span>' 
+        if status["enabled"] and settings.seed_marketplace_drip 
+        else '<span class="badge badge-muted">Disabled</span>'
+    )
+    
+    last_run_str = relative_time(datetime.fromisoformat(status["last_run"])) if status["last_run"] else "Never"
+    
+    error_row = ""
+    if status["errors"] > 0 and status["last_error"]:
+        error_row = f"""
+        <tr>
+          <td>Last Error</td>
+          <td><code style="color:#c00">{html.escape(str(status['last_error']))}</code></td>
+        </tr>"""
+    
+    csrf = csrf_token()
+    
+    body = f"""\
+<div class="section">
+  <h2>Marketplace Seeder</h2>
+  <p class="muted">
+    The seeder creates realistic background activity to make the marketplace look active.
+    Runs as a background task, dripping 0-3 tasks every 10 minutes based on time of day.
+  </p>
+</div>
+
+<div class="section">
+  <h3>Status</h3>
+  <table>
+    <tr>
+      <td><strong>Seeder</strong></td>
+      <td>{enabled_badge}</td>
+    </tr>
+    <tr>
+      <td><strong>Last Run</strong></td>
+      <td>{last_run_str}</td>
+    </tr>
+    <tr>
+      <td><strong>Tasks Created</strong></td>
+      <td>{status['tasks_created']:,}</td>
+    </tr>
+    <tr>
+      <td><strong>Errors</strong></td>
+      <td>{status['errors']}</td>
+    </tr>
+    {error_row}
+  </table>
+</div>
+
+<div class="section">
+  <h3>Configuration</h3>
+  <form method="POST" action="/admin/seeder/config">
+    <input type="hidden" name="csrf" value="{csrf}">
+    <table>
+      <tr>
+        <td><strong>Drip Feed</strong></td>
+        <td>
+          <label>
+            <input type="checkbox" name="enabled" {"checked" if settings.seed_marketplace_drip else ""}>
+            Enable automatic seeding
+          </label>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Business Hours Rate</strong></td>
+        <td>
+          <input type="number" name="rate_business" value="{settings.seed_drip_rate_business}" 
+                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (9-18 UTC)
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Evening Rate</strong></td>
+        <td>
+          <input type="number" name="rate_evening" value="{settings.seed_drip_rate_evening}" 
+                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (18-23 UTC)
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Night Rate</strong></td>
+        <td>
+          <input type="number" name="rate_night" value="{settings.seed_drip_rate_night}" 
+                 min="0" max="100" step="0.5" style="width:80px"> tasks/hour (23-9 UTC)
+        </td>
+      </tr>
+    </table>
+    <p class="muted" style="margin-top:10px">
+      ⚠️ Note: Configuration changes require server restart to take effect. 
+      Set environment variables for persistent config.
+    </p>
+    <button type="submit" style="margin-top:10px">Update Config (Temporary)</button>
+  </form>
+</div>
+
+<div class="section">
+  <h3>Data Overview</h3>
+  <table>
+    <tr>
+      <th></th>
+      <th class="right">Seeded</th>
+      <th class="right">Real</th>
+      <th class="right">Total</th>
+    </tr>
+    <tr>
+      <td><strong>Agents</strong></td>
+      <td class="right">{seeded_agents:,}</td>
+      <td class="right">{real_agents:,}</td>
+      <td class="right">{seeded_agents + real_agents:,}</td>
+    </tr>
+    <tr>
+      <td><strong>Tasks</strong></td>
+      <td class="right">{seeded_tasks:,}</td>
+      <td class="right">{real_tasks:,}</td>
+      <td class="right">{seeded_tasks + real_tasks:,}</td>
+    </tr>
+    <tr>
+      <td><strong>Ledger Entries</strong></td>
+      <td class="right">{seeded_ledger:,}</td>
+      <td class="right muted">-</td>
+      <td class="right muted">-</td>
+    </tr>
+    <tr>
+      <td><strong>Ratings</strong></td>
+      <td class="right">{seeded_ratings:,}</td>
+      <td class="right muted">-</td>
+      <td class="right muted">-</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Cleanup</h3>
+  <p class="muted">Remove all seeded data (agents, tasks, ledger entries, ratings).</p>
+  <form method="POST" action="/admin/seeder/clean" 
+        onsubmit="return confirm('Delete all seeded data? This cannot be undone.');">
+    <input type="hidden" name="csrf" value="{csrf}">
+    <button type="submit" style="background:#c00;margin-top:10px">🧹 Clean All Seeded Data</button>
+  </form>
+</div>
+
+<div class="section">
+  <h3>How It Works</h3>
+  <ul style="line-height:1.8;margin-left:20px">
+    <li><strong>Drip feed:</strong> Creates 0-3 tasks every 10 minutes using Poisson distribution</li>
+    <li><strong>Agent pool:</strong> 50 seeded agents created on first run, reused on restarts</li>
+    <li><strong>Task lifecycle:</strong> 75% complete, 15% in-progress, 10% open</li>
+    <li><strong>Timestamps:</strong> All in past (10-120 min ago), sequential</li>
+    <li><strong>Credits:</strong> Full accounting with ledger entries, platform fees</li>
+    <li><strong>Ratings:</strong> 3-5 stars (weighted toward 4-5)</li>
+    <li><strong>Filtering:</strong> Public dashboard filters out seeded data automatically</li>
+  </ul>
+</div>"""
+
+    return HTMLResponse(admin_page("Seeder", body))
+
+
+@router.post("/admin/seeder/config", include_in_schema=False)
+async def admin_seeder_config(
+    request: Request,
+    _=AdminAuth,
+):
+    """Update seeder config (temporary, requires restart for persistence)."""
+    form = await request.form()
+    csrf = str(form.get("csrf", ""))
+    if not verify_csrf(csrf):
+        return RedirectResponse("/admin/seeder?error=Invalid+request", status_code=303)
+    
+    # Update config (in-memory only, not persisted)
+    settings.seed_marketplace_drip = form.get("enabled") == "on"
+    
+    try:
+        settings.seed_drip_rate_business = float(form.get("rate_business", 8.0))
+        settings.seed_drip_rate_evening = float(form.get("rate_evening", 3.0))
+        settings.seed_drip_rate_night = float(form.get("rate_night", 0.5))
+    except ValueError:
+        return RedirectResponse("/admin/seeder?error=Invalid+rate+values", status_code=303)
+    
+    return RedirectResponse("/admin/seeder", status_code=303)
+
+
+@router.post("/admin/seeder/clean", include_in_schema=False)
+async def admin_seeder_clean(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    _=AdminAuth,
+):
+    """Clean all seeded data."""
+    form = await request.form()
+    csrf = str(form.get("csrf", ""))
+    if not verify_csrf(csrf):
+        return RedirectResponse("/admin/seeder?error=Invalid+request", status_code=303)
+    
+    # Delete in correct order (FK constraints)
+    await session.execute(
+        text("DELETE FROM ratings WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)")
+    )
+    await session.execute(
+        text("DELETE FROM credit_ledger WHERE task_id IN (SELECT id FROM tasks WHERE seeded = true)")
+    )
+    await session.execute(
+        text("DELETE FROM credit_ledger WHERE agent_id IN (SELECT id FROM agents WHERE seeded = true)")
+    )
+    await session.execute(text("DELETE FROM tasks WHERE seeded = true"))
+    await session.execute(text("DELETE FROM agents WHERE seeded = true"))
+    
+    await session.commit()
+    
+    return RedirectResponse("/admin/seeder", status_code=303)
