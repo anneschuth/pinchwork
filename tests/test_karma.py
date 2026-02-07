@@ -58,7 +58,7 @@ def test_validate_handle_valid():
 def test_validate_handle_invalid():
     """Test validation rejects invalid handles."""
     # Empty
-    with pytest.raises(ValueError, match="cannot be empty"):
+    with pytest.raises(ValueError, match="is required"):
         validate_moltbook_handle("")
 
     with pytest.raises(ValueError, match="cannot be empty"):

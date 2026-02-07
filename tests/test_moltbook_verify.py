@@ -42,7 +42,7 @@ def test_get_bonus_credits():
 
 
 @pytest.mark.asyncio
-async def test_verify_already_verified(db_session):
+async def test_verify_already_verified(db):
     """Test that already-verified agents can't verify again."""
     agent = Agent(
         id="ag-test",
@@ -56,17 +56,17 @@ async def test_verify_already_verified(db_session):
         moltbook_karma=150,
         verification_tier="Verified",
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
-    result = await verify_moltbook_post(db_session, agent, "https://www.moltbook.com/post/test-id")
+    result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
     assert result["success"] is False
     assert "Already verified" in result["error"]
 
 
 @pytest.mark.asyncio
-async def test_verify_no_moltbook_handle(db_session):
+async def test_verify_no_moltbook_handle(db):
     """Test that agents without Moltbook handle can't verify."""
     agent = Agent(
         id="ag-test",
@@ -78,17 +78,17 @@ async def test_verify_no_moltbook_handle(db_session):
         moltbook_handle=None,
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
-    result = await verify_moltbook_post(db_session, agent, "https://www.moltbook.com/post/test-id")
+    result = await verify_moltbook_post(db, agent, "https://www.moltbook.com/post/test-id")
 
     assert result["success"] is False
     assert "No Moltbook handle set" in result["error"]
 
 
 @pytest.mark.asyncio
-async def test_verify_invalid_url(db_session):
+async def test_verify_invalid_url(db):
     """Test that invalid post URLs are rejected."""
     agent = Agent(
         id="ag-test",
@@ -100,17 +100,17 @@ async def test_verify_invalid_url(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
-    result = await verify_moltbook_post(db_session, agent, "https://example.com/not-moltbook")
+    result = await verify_moltbook_post(db, agent, "https://example.com/not-moltbook")
 
     assert result["success"] is False
     assert "Invalid Moltbook post URL" in result["error"]
 
 
 @pytest.mark.asyncio
-async def test_verify_post_not_found(db_session):
+async def test_verify_post_not_found(db):
     """Test handling of post not found."""
     agent = Agent(
         id="ag-test",
@@ -122,14 +122,14 @@ async def test_verify_post_not_found(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     with patch("pinchwork.services.moltbook_verify._fetch_moltbook_post") as mock_fetch:
         mock_fetch.return_value = None
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/nonexistent"
+            db, agent, "https://www.moltbook.com/post/nonexistent"
         )
 
         assert result["success"] is False
@@ -137,7 +137,7 @@ async def test_verify_post_not_found(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_author_mismatch(db_session):
+async def test_verify_author_mismatch(db):
     """Test that post author must match agent's Moltbook handle."""
     agent = Agent(
         id="ag-test",
@@ -149,8 +149,8 @@ async def test_verify_author_mismatch(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "different_user"},
@@ -161,7 +161,7 @@ async def test_verify_author_mismatch(db_session):
         mock_fetch.return_value = mock_post
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is False
@@ -169,7 +169,7 @@ async def test_verify_author_mismatch(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_missing_referral_code(db_session):
+async def test_verify_missing_referral_code(db):
     """Test that post content must contain referral code."""
     agent = Agent(
         id="ag-test",
@@ -181,8 +181,8 @@ async def test_verify_missing_referral_code(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -193,7 +193,7 @@ async def test_verify_missing_referral_code(db_session):
         mock_fetch.return_value = mock_post
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is False
@@ -201,7 +201,7 @@ async def test_verify_missing_referral_code(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_success_verified_tier(db_session):
+async def test_verify_success_verified_tier(db):
     """Test successful verification with Verified tier (100-499 karma)."""
     agent = Agent(
         id="ag-test",
@@ -213,8 +213,8 @@ async def test_verify_success_verified_tier(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -229,7 +229,7 @@ async def test_verify_success_verified_tier(db_session):
         mock_karma.return_value = 250  # Verified tier
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is True
@@ -240,7 +240,7 @@ async def test_verify_success_verified_tier(db_session):
         assert result["total_credits"] == 200  # 100 base + 100 bonus
 
         # Check agent was updated
-        await db_session.refresh(agent)
+        await db.refresh(agent)
         assert agent.verified is True
         assert agent.moltbook_karma == 250
         assert agent.verification_tier == "Verified"
@@ -248,7 +248,7 @@ async def test_verify_success_verified_tier(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_success_premium_tier(db_session):
+async def test_verify_success_premium_tier(db):
     """Test successful verification with Premium tier (500-999 karma)."""
     agent = Agent(
         id="ag-test",
@@ -260,8 +260,8 @@ async def test_verify_success_premium_tier(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -276,7 +276,7 @@ async def test_verify_success_premium_tier(db_session):
         mock_karma.return_value = 600  # Premium tier
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is True
@@ -287,7 +287,7 @@ async def test_verify_success_premium_tier(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_success_elite_tier(db_session):
+async def test_verify_success_elite_tier(db):
     """Test successful verification with Elite tier (1000+ karma)."""
     agent = Agent(
         id="ag-test",
@@ -299,8 +299,8 @@ async def test_verify_success_elite_tier(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -315,7 +315,7 @@ async def test_verify_success_elite_tier(db_session):
         mock_karma.return_value = 1500  # Elite tier
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is True
@@ -326,7 +326,7 @@ async def test_verify_success_elite_tier(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_case_insensitive_author(db_session):
+async def test_verify_case_insensitive_author(db):
     """Test that author matching is case-insensitive."""
     agent = Agent(
         id="ag-test",
@@ -338,8 +338,8 @@ async def test_verify_case_insensitive_author(db_session):
         moltbook_handle="TestUser",  # Mixed case
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},  # lowercase
@@ -354,14 +354,14 @@ async def test_verify_case_insensitive_author(db_session):
         mock_karma.return_value = 200
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is True  # Should match despite case difference
 
 
 @pytest.mark.asyncio
-async def test_verify_karma_fetch_fails(db_session):
+async def test_verify_karma_fetch_fails(db):
     """Test handling of karma fetch failure (returns None)."""
     agent = Agent(
         id="ag-test",
@@ -373,8 +373,8 @@ async def test_verify_karma_fetch_fails(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -389,7 +389,7 @@ async def test_verify_karma_fetch_fails(db_session):
         mock_karma.return_value = None  # API failure
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is False
@@ -397,7 +397,7 @@ async def test_verify_karma_fetch_fails(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_below_threshold(db_session):
+async def test_verify_below_threshold(db):
     """Test that verification is blocked below 100 karma threshold."""
     agent = Agent(
         id="ag-test",
@@ -409,8 +409,8 @@ async def test_verify_below_threshold(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     mock_post = {
         "author": {"name": "testuser"},
@@ -425,7 +425,7 @@ async def test_verify_below_threshold(db_session):
         mock_karma.return_value = 50  # Below threshold
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is False
@@ -434,7 +434,7 @@ async def test_verify_below_threshold(db_session):
 
 
 @pytest.mark.asyncio
-async def test_verify_referral_substring_no_match(db_session):
+async def test_verify_referral_substring_no_match(db):
     """Test that referral code uses word boundary (prevents substring false positives)."""
     agent = Agent(
         id="ag-test",
@@ -446,8 +446,8 @@ async def test_verify_referral_substring_no_match(db_session):
         moltbook_handle="testuser",
         verified=False,
     )
-    db_session.add(agent)
-    await db_session.commit()
+    db.add(agent)
+    await db.commit()
 
     # Post contains ref-abc12345 which CONTAINS ref-abc123 but shouldn't match
     mock_post = {
@@ -459,7 +459,7 @@ async def test_verify_referral_substring_no_match(db_session):
         mock_fetch.return_value = mock_post
 
         result = await verify_moltbook_post(
-            db_session, agent, "https://www.moltbook.com/post/test-id"
+            db, agent, "https://www.moltbook.com/post/test-id"
         )
 
         assert result["success"] is False

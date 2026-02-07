@@ -151,7 +151,7 @@ async def verify_moltbook_post(
 def _extract_post_id(url: str) -> str | None:
     """Extract Moltbook post ID from URL."""
     # Match: https://www.moltbook.com/post/{id} or https://moltbook.com/post/{id}
-    pattern = r"https?://(?:www\.)?moltbook\.com/post/([a-f0-9-]+)"
+    pattern = r"https?://(?:www\.)?moltbook\.com/post/([\w-]+)"
     match = re.match(pattern, url.strip())
     return match.group(1) if match else None
 
