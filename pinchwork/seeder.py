@@ -13,6 +13,7 @@ import json
 import logging
 import random
 import secrets
+from collections import deque
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -36,7 +37,6 @@ _seeder_status = {
 }
 
 # Track recently used templates to avoid duplicates (last 5 templates)
-from collections import deque
 _recent_templates = deque(maxlen=5)
 
 
