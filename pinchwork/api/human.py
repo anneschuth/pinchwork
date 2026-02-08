@@ -243,15 +243,12 @@ _CSS = """\
       padding: 1px 0;
     }
     td:nth-child(1) {
-      display: none;
-    }
-    td:nth-child(2) {
       width: 100%;
       font-weight: bold;
     }
+    td:nth-child(2),
     td:nth-child(3),
-    td:nth-child(4),
-    td:nth-child(5) {
+    td:nth-child(4) {
       font-size: 8pt;
     }
     td:nth-child(3)::before {
