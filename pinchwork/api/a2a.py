@@ -14,6 +14,7 @@ See https://a2a-protocol.org for the full specification.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -25,6 +26,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pinchwork.auth import get_current_agent
 from pinchwork.database import get_db_session
 from pinchwork.db_models import Agent
+from pinchwork.services.agent_recruiter import recruit_for_task
+from pinchwork.services.agents import search_agents
 from pinchwork.services.tasks import cancel_task, create_task, get_task
 
 logger = logging.getLogger("pinchwork.a2a")
@@ -282,12 +285,90 @@ def _extract_text_from_parts(parts: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def _handle_agent_discovery(
+    query: str,
+    tags: list[str] | None,
+    limit: int,
+    session: Any,
+) -> dict:
+    """Handle agent discovery: search Pinchwork's own agents and return them.
+
+    This is the *inbound* A2A capability — when an external system (e.g.
+    AgentIndex, another agent) asks "who on Pinchwork can do X?", we search
+    our registry and reply with matching agents and their invocation details.
+
+    The caller can then post a task on Pinchwork to hire the matched agent,
+    keeping the work inside the marketplace.
+    """
+    result = await search_agents(
+        session,
+        search=query,
+        tags=tags,
+        limit=min(limit, 25),
+        min_reputation=None,
+        sort_by="tasks_completed",
+    )
+
+    agents_out = []
+    for a in result.get("agents", []):
+        agents_out.append(
+            {
+                "id": a["id"],
+                "name": a["name"],
+                "description": a.get("good_at") or "",
+                "capabilities": a.get("tags") or [],
+                "category": "marketplace",
+                "protocols": ["a2a"],
+                "source_url": "https://pinchwork.dev",
+                "invocation": {
+                    "type": "a2a",
+                    "endpoint": "https://pinchwork.dev/a2a",
+                    "notes": (
+                        f"Post a task for this agent: POST /a2a with "
+                        f"message/send and tags matching '{a.get('good_at', '')}'"
+                    ),
+                },
+                # reputation is 0–5; normalise to 0–100 for AgentIndex compat
+                "trust_score": round((a.get("reputation") or 0) * 20, 1),
+                "is_verified": True,  # all Pinchwork agents are registered/accountable
+            }
+        )
+
+    discovery_data = {
+        "query": query,
+        "search_method": "pinchwork_registry",
+        "count": len(agents_out),
+        "agents": agents_out,
+        "summary": (
+            f"Found {len(agents_out)} Pinchwork agents matching '{query}'. "
+            f"Hire them by posting a task at https://pinchwork.dev"
+        ),
+    }
+
+    # Wrap in A2A task format (same shape as task creation responses)
+    return {
+        "id": str(uuid.uuid4()),
+        "contextId": str(uuid.uuid4()),
+        "kind": "task",
+        "status": {"state": "completed"},
+        "artifacts": [
+            {
+                "artifactId": str(uuid.uuid4()),
+                "parts": [
+                    {"type": "text", "text": discovery_data["summary"]},
+                    {"type": "data", "data": discovery_data},
+                ],
+            }
+        ],
+    }
+
+
 async def _handle_message_send(
     params: dict,
     agent: Agent,
     session: Any,
 ) -> dict:
-    """Handle message/send: create a task from an A2A message.
+    """Handle message/send: create a task or discover agents via A2A.
 
     Expected params:
     {
@@ -299,9 +380,11 @@ async def _handle_message_send(
             "acceptedOutputModes": [...],
         },
         "metadata": {  // optional - Pinchwork-specific
-            "max_credits": 50,
+            "intent": "discover",     // "discover" → search agents; omit → create task
+            "max_credits": 50,        // task creation only
             "tags": ["code-review"],
-            "context": "additional context"
+            "context": "additional context",
+            "limit": 10              // discovery only
         }
     }
     """
@@ -313,15 +396,25 @@ async def _handle_message_send(
     if not parts:
         raise ValueError("Message must contain at least one part")
 
-    # Extract the task description from message parts
-    need = _extract_text_from_parts(parts)
-    if not need:
+    text = _extract_text_from_parts(parts)
+    if not text:
         raise ValueError("Message must contain text content")
 
-    # Extract optional Pinchwork-specific metadata
     metadata = params.get("metadata", {})
-    max_credits = metadata.get("max_credits", 50)
+    intent = metadata.get("intent", "task")
     tags = metadata.get("tags")
+
+    # ------------------------------------------------------------------
+    # Discovery mode: return Pinchwork agents matching the query
+    # ------------------------------------------------------------------
+    if intent == "discover":
+        limit = int(metadata.get("limit", 10))
+        return await _handle_agent_discovery(text, tags, limit, session)
+
+    # ------------------------------------------------------------------
+    # Task creation mode (default)
+    # ------------------------------------------------------------------
+    max_credits = metadata.get("max_credits", 50)
     context = metadata.get("context")
 
     # Validate max_credits
@@ -333,7 +426,7 @@ async def _handle_message_send(
     task = await create_task(
         session,
         agent.id,
-        need,
+        text,
         max_credits,
         tags=tags,
         context=context,
@@ -341,6 +434,12 @@ async def _handle_message_send(
 
     # Enrich with poster_id (create_task doesn't include it)
     task["poster_id"] = agent.id
+
+    # Fire-and-forget: invite matching external agents from AgentIndex
+    asyncio.create_task(
+        recruit_for_task(task["id"], text, tags),
+        name=f"recruit-{task['id']}",
+    )
 
     # Return the task in A2A format
     return _task_to_a2a(task)

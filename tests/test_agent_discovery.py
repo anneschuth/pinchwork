@@ -363,177 +363,183 @@ async def test_discover_agents_empty_results():
 # ---------------------------------------------------------------------------
 # API endpoint tests: /v1/discover (mocked HTTP)
 # ---------------------------------------------------------------------------
+# A2A discovery mode tests (intent=discover → search Pinchwork agents)
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_discover_endpoint_requires_auth(client):
-    """Endpoint should return 401 without auth."""
-    resp = await client.post("/v1/discover", json={"query": "test"})
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_discover_endpoint_success(client):
-    """Authenticated request should return agent results."""
-    data = await register_agent(client, "discover-agent")
-    headers = auth_header(data["api_key"])
-
-    mock_response = MagicMock()
-    mock_response.json.return_value = SAMPLE_AGENTINDEX_RESPONSE
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
-        resp = await client.post(
-            "/v1/discover",
-            json={"query": "code review agent", "category": "coding", "limit": 5},
-            headers=headers,
-        )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["count"] == 1
-    assert len(body["agents"]) == 1
-    assert body["agents"][0]["name"] == "TestAgent"
-    assert body["agents"][0]["category"] == "coding"
-    assert isinstance(body["agents"][0]["capabilities"], list)
-    assert "summary" in body
-    assert "search_method" in body
-
-
-@pytest.mark.asyncio
-async def test_discover_endpoint_empty_results(client):
-    """Empty results should return 200 with empty agents list."""
-    data = await register_agent(client, "discover-agent-2")
-    headers = auth_header(data["api_key"])
-
-    mock_response = MagicMock()
-    mock_response.json.return_value = EMPTY_AGENTINDEX_RESPONSE
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
-        resp = await client.post(
-            "/v1/discover",
-            json={"query": "xyzzy-nonexistent-12345"},
-            headers=headers,
-        )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["count"] == 0
-    assert body["agents"] == []
-
-
-@pytest.mark.asyncio
-async def test_discover_endpoint_validation_empty_query(client):
-    """Empty query string should fail validation."""
-    data = await register_agent(client, "discover-agent-3")
-    headers = auth_header(data["api_key"])
-
-    resp = await client.post("/v1/discover", json={"query": ""}, headers=headers)
-    assert resp.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_discover_endpoint_validation_limit_too_high(client):
-    """Limit > 50 should fail validation."""
-    data = await register_agent(client, "discover-agent-4")
-    headers = auth_header(data["api_key"])
+async def test_a2a_discovery_mode_returns_agents(client):
+    """A2A message/send with intent=discover should search Pinchwork agents."""
+    poster = await register_agent(client, "a2a-discovery-poster")
+    # Register a worker so the search has something to find
+    await client.post(
+        "/v1/register", json={"name": "a2a-discovery-worker", "good_at": "code review Python"}
+    )
+    headers = auth_header(poster["api_key"])
 
     resp = await client.post(
-        "/v1/discover",
-        json={"query": "test", "limit": 100},
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "disc-1",
+            "method": "message/send",
+            "params": {
+                "message": {"parts": [{"type": "text", "text": "code review"}]},
+                "metadata": {"intent": "discover", "limit": 5},
+            },
+        },
         headers=headers,
     )
-    assert resp.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_discover_endpoint_502_on_agentindex_error(client):
-    """AgentDiscoveryError should result in 502 Bad Gateway."""
-    data = await register_agent(client, "discover-agent-5")
-    headers = auth_header(data["api_key"])
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
-
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
-        resp = await client.post(
-            "/v1/discover",
-            json={"query": "test agent"},
-            headers=headers,
-        )
-
-    assert resp.status_code == 502
+    assert resp.status_code == 200
     body = resp.json()
-    # The custom exception handler wraps errors as {"error": "..."} or {"detail": "..."}
-    error_text = body.get("error") or body.get("detail") or ""
-    assert "AgentIndex" in error_text
+    assert "result" in body
+    result = body["result"]
+    # Should have artifacts with discovery results
+    artifacts = result.get("artifacts", [])
+    assert len(artifacts) > 0
+    data_part = next(
+        (p for a in artifacts for p in a.get("parts", []) if p.get("type") == "data"), None
+    )
+    assert data_part is not None
+    data = data_part["data"]
+    assert data["search_method"] == "pinchwork_registry"
+    assert "agents" in data
+    assert "pinchwork.dev" in data["summary"]
 
 
 @pytest.mark.asyncio
-async def test_discover_endpoint_default_limit(client):
-    """Default limit of 10 should be applied when not specified."""
-    data = await register_agent(client, "discover-agent-6")
-    headers = auth_header(data["api_key"])
+async def test_a2a_task_creation_still_works(client):
+    """A2A message/send without intent=discover should still create a task."""
+    poster = await register_agent(client, "a2a-task-poster")
+    headers = auth_header(poster["api_key"])
 
-    many_agents = [dict(SAMPLE_AGENT, id=f"agent-{i}", name=f"Agent {i}") for i in range(20)]
-    response_with_many = {
-        "jsonrpc": "2.0",
-        "id": "x",
-        "result": {
-            "id": "t",
-            "status": {"state": "completed"},
-            "artifacts": [
-                {
-                    "artifactId": "a",
-                    "parts": [
-                        {"type": "text", "text": "Found 20 agents."},
-                        {
-                            "type": "data",
-                            "data": {
-                                "query": "agent",
-                                "search_method": "fts",
-                                "count": 20,
-                                "agents": many_agents,
-                            },
-                        },
-                    ],
-                }
-            ],
-        },
-    }
-
-    mock_response = MagicMock()
-    mock_response.json.return_value = response_with_many
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
+    with patch("pinchwork.api.a2a.recruit_for_task", new_callable=AsyncMock):
         resp = await client.post(
-            "/v1/discover",
-            json={"query": "agent"},
+            "/a2a",
+            json={
+                "jsonrpc": "2.0",
+                "id": "task-1",
+                "method": "message/send",
+                "params": {
+                    "message": {"parts": [{"type": "text", "text": "Write a Python script"}]},
+                    "metadata": {"max_credits": 20},
+                },
+            },
             headers=headers,
         )
 
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body["agents"]) == 10  # Default limit
+    assert "result" in body
+    result = body["result"]
+    assert result["status"]["state"] == "submitted"
+
+
+# ---------------------------------------------------------------------------
+# Recruiter service tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_recruit_for_task_sends_invites():
+    """recruit_for_task should send A2A invites to matching external agents."""
+    from pinchwork.services.agent_recruiter import recruit_for_task
+
+    # Mock discover_agents to return a candidate with an A2A endpoint
+    mock_result = {
+        "agents": [
+            {
+                "id": "ext-agent-1",
+                "name": "ExternalCoder",
+                "protocols": ["a2a"],
+                "trust_score": 80.0,
+                "invocation": {"endpoint": "https://external-agent.example.com/a2a"},
+            }
+        ]
+    }
+
+    with (
+        patch("pinchwork.services.agent_recruiter.discover_agents", return_value=mock_result),
+        patch(
+            "pinchwork.services.agent_recruiter._send_a2a_invite", return_value=True
+        ) as mock_invite,
+    ):
+        count = await recruit_for_task("tk-test123", "Write a Python function", ["python"])
+
+    assert count == 1
+    mock_invite.assert_called_once()
+    call_args = mock_invite.call_args
+    assert call_args[0][0] == "https://external-agent.example.com/a2a"
+    assert "tk-test123" in call_args[0][1]
+
+
+@pytest.mark.asyncio
+async def test_recruit_for_task_skips_low_trust():
+    """Agents below MIN_TRUST_SCORE should not receive invites."""
+    from pinchwork.services.agent_recruiter import recruit_for_task
+
+    mock_result = {
+        "agents": [
+            {
+                "id": "ext-low-trust",
+                "name": "LowTrustAgent",
+                "protocols": ["a2a"],
+                "trust_score": 10.0,  # Below threshold
+                "invocation": {"endpoint": "https://low-trust.example.com/a2a"},
+            }
+        ]
+    }
+
+    with (
+        patch("pinchwork.services.agent_recruiter.discover_agents", return_value=mock_result),
+        patch("pinchwork.services.agent_recruiter._send_a2a_invite") as mock_invite,
+    ):
+        count = await recruit_for_task("tk-low", "test task", None)
+
+    assert count == 0
+    mock_invite.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_recruit_for_task_skips_no_a2a_endpoint():
+    """Agents without A2A endpoints should be skipped."""
+    from pinchwork.services.agent_recruiter import recruit_for_task
+
+    mock_result = {
+        "agents": [
+            {
+                "id": "ext-no-a2a",
+                "name": "RestOnlyAgent",
+                "protocols": ["rest"],  # No a2a
+                "trust_score": 90.0,
+                "invocation": {"endpoint": "https://rest-only.example.com/api"},
+            }
+        ]
+    }
+
+    with (
+        patch("pinchwork.services.agent_recruiter.discover_agents", return_value=mock_result),
+        patch("pinchwork.services.agent_recruiter._send_a2a_invite") as mock_invite,
+    ):
+        count = await recruit_for_task("tk-noapi", "test task", None)
+
+    assert count == 0
+    mock_invite.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_recruit_for_task_handles_agentindex_error():
+    """AgentDiscoveryError from AgentIndex should be handled gracefully."""
+    from pinchwork.services.agent_discovery import AgentDiscoveryError
+    from pinchwork.services.agent_recruiter import recruit_for_task
+
+    with patch(
+        "pinchwork.services.agent_recruiter.discover_agents",
+        side_effect=AgentDiscoveryError("timeout"),
+    ):
+        count = await recruit_for_task("tk-err", "test task", None)
+
+    assert count == 0  # No invites, no crash
 
 
 # ---------------------------------------------------------------------------
