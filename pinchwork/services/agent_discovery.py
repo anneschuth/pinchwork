@@ -163,9 +163,7 @@ async def discover_agents(
     except httpx.TimeoutException as exc:
         raise AgentDiscoveryError("AgentIndex request timed out") from exc
     except httpx.HTTPStatusError as exc:
-        raise AgentDiscoveryError(
-            f"AgentIndex HTTP error {exc.response.status_code}"
-        ) from exc
+        raise AgentDiscoveryError(f"AgentIndex HTTP error {exc.response.status_code}") from exc
     except httpx.RequestError as exc:
         raise AgentDiscoveryError(f"AgentIndex request failed: {exc}") from exc
 
