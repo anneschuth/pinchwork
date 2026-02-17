@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     rate_limit_deliver: str = "30/minute"
     rate_limit_read: str = "120/minute"
     rate_limit_admin: str = "30/minute"
+    rate_limit_discover: str = "10/minute"
     max_extracted_tags: int = 20
     rejection_grace_minutes: int = 5
     welcome_task_enabled: bool = True
