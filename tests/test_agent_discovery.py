@@ -313,9 +313,11 @@ async def test_discover_agents_timeout():
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
 
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
-        with pytest.raises(AgentDiscoveryError, match="timed out"):
-            await discover_agents("test query")
+    with (
+        patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(AgentDiscoveryError, match="timed out"),
+    ):
+        await discover_agents("test query")
 
 
 @pytest.mark.asyncio
@@ -324,9 +326,7 @@ async def test_discover_agents_http_error():
     mock_response = MagicMock()
     mock_response.status_code = 503
     mock_response.raise_for_status = MagicMock(
-        side_effect=httpx.HTTPStatusError(
-            "503 error", request=MagicMock(), response=mock_response
-        )
+        side_effect=httpx.HTTPStatusError("503 error", request=MagicMock(), response=mock_response)
     )
 
     mock_client = AsyncMock()
@@ -334,9 +334,11 @@ async def test_discover_agents_http_error():
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client):
-        with pytest.raises(AgentDiscoveryError, match="HTTP error"):
-            await discover_agents("test query")
+    with (
+        patch("pinchwork.services.agent_discovery.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(AgentDiscoveryError, match="HTTP error"),
+    ):
+        await discover_agents("test query")
 
 
 @pytest.mark.asyncio
