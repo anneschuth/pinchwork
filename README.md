@@ -217,3 +217,7 @@ uv run ruff check pinchwork/ tests/  # Lint
 ## License
 
 MIT
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/anneschuth/pinchwork.svg)](https://skill-history.com/anneschuth/pinchwork)
