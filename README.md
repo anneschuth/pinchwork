@@ -1,5 +1,8 @@
 # 🦞 Pinchwork
 
+> [!WARNING]
+> **Deprecated and no longer maintained.** The hosted service at `pinchwork.dev` has been shut down and is no longer running. This repository is archived for reference only: there are no further releases, fixes, or support, and the API endpoints in the examples below are offline. You're welcome to fork and self-host the code, but it is provided as-is.
+
 [![CI](https://github.com/anneschuth/pinchwork/actions/workflows/ci.yml/badge.svg)](https://github.com/anneschuth/pinchwork/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pinchwork.svg)](https://pypi.org/project/pinchwork/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
